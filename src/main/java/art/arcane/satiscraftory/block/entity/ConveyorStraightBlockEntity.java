@@ -8,7 +8,9 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.Containers;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -22,20 +24,30 @@ import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemStackHandler;
 
 import javax.annotation.Nullable;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 
 public class ConveyorStraightBlockEntity extends BlockEntity {
     private static final int BUFFER_SLOTS = 5;
     private static final long TRAVEL_TICKS = 10L;
+    private static final long STEP_TICKS = Math.max(1L, TRAVEL_TICKS / BUFFER_SLOTS);
     private static final double VISUAL_RANGE_BLOCKS = 10.0D;
-    private static final long BLOCKED_SYNC_INTERVAL = 5L;
     private static final String INVENTORY_TAG = "inventory";
-    private static final String ENTRY_TICKS_TAG = "entry_ticks";
-    private static final String LAST_TICK_TAG = "last_tick";
+    private static final String RENDER_POSITIONS_TAG = "render_positions";
 
-    private final long[] entryTicks = new long[BUFFER_SLOTS];
+    private final int[] renderPositions = new int[BUFFER_SLOTS];
     private final ConveyorVisualItemEntity[] clientVisualItems = new ConveyorVisualItemEntity[BUFFER_SLOTS];
     private long lastTickGameTime = Long.MIN_VALUE;
+    private boolean needsSync;
+    @Nullable
+    private transient Method clientPutNonPlayerEntityMethod;
+    @Nullable
+    private transient Method clientRemoveEntityMethod;
+    private transient boolean resolvedClientEntityMethods;
+    @Nullable
+    private transient Field itemBobOffsField;
+    private transient boolean resolvedItemBobField;
 
     private final ItemStackHandler inventory = new ItemStackHandler(BUFFER_SLOTS) {
         @Override
@@ -50,7 +62,7 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
             }
 
             int tailSlot = findFirstEmptySlot();
-            if (tailSlot < 0 || slot != tailSlot) {
+            if (tailSlot < 0 || slot != tailSlot || !canAcceptNewItemAtStep()) {
                 return stack;
             }
 
@@ -62,7 +74,8 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
             }
 
             if (!simulate) {
-                entryTicks[slot] = getCurrentGameTick();
+                renderPositions[slot] = 0;
+                markDirtyForSync();
             }
 
             ItemStack leftover = stack.copy();
@@ -72,21 +85,22 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
 
         @Override
         public ItemStack extractItem(int slot, int amount, boolean simulate) {
-            if (slot != 0 || amount <= 0 || !isHeadReady(getCurrentGameTick())) {
+            if (slot != 0 || amount <= 0 || !hasHeadAtOutput()) {
                 return ItemStack.EMPTY;
             }
 
             ItemStack extracted = super.extractItem(0, 1, simulate);
             if (!simulate && !extracted.isEmpty()) {
-                entryTicks[0] = 0L;
+                renderPositions[0] = -1;
                 compactQueue();
+                markDirtyForSync();
             }
             return extracted;
         }
 
         @Override
         protected void onContentsChanged(int slot) {
-            setChanged();
+            markDirtyForSync();
         }
     };
 
@@ -111,23 +125,25 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
     @Override
     protected void saveAdditional(CompoundTag tag) {
         tag.put(INVENTORY_TAG, inventory.serializeNBT());
-        tag.putLongArray(ENTRY_TICKS_TAG, entryTicks);
-        if (lastTickGameTime != Long.MIN_VALUE) {
-            tag.putLong(LAST_TICK_TAG, lastTickGameTime);
-        }
+        tag.putIntArray(RENDER_POSITIONS_TAG, renderPositions);
         super.saveAdditional(tag);
     }
 
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
-        Arrays.fill(entryTicks, 0L);
+        Arrays.fill(renderPositions, -1);
         if (tag.contains(INVENTORY_TAG)) {
             inventory.deserializeNBT(tag.getCompound(INVENTORY_TAG));
         }
-        long[] loadedEntryTicks = tag.getLongArray(ENTRY_TICKS_TAG);
-        System.arraycopy(loadedEntryTicks, 0, entryTicks, 0, Math.min(loadedEntryTicks.length, entryTicks.length));
-        lastTickGameTime = tag.contains(LAST_TICK_TAG) ? tag.getLong(LAST_TICK_TAG) : Long.MIN_VALUE;
+        if (tag.contains(RENDER_POSITIONS_TAG)) {
+            int[] loadedRenderPositions = tag.getIntArray(RENDER_POSITIONS_TAG);
+            for (int slot = 0; slot < Math.min(loadedRenderPositions.length, renderPositions.length); slot++) {
+                renderPositions[slot] = clampRenderPosition(loadedRenderPositions[slot]);
+            }
+        }
+        lastTickGameTime = Long.MIN_VALUE;
+        needsSync = false;
         normalizeInventory();
     }
 
@@ -169,7 +185,7 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
             if (!stack.isEmpty()) {
                 Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), stack);
                 inventory.setStackInSlot(slot, ItemStack.EMPTY);
-                entryTicks[slot] = 0L;
+                renderPositions[slot] = -1;
             }
         }
     }
@@ -189,25 +205,18 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
 
         boolean changed = normalizeInventory();
         long now = level.getGameTime();
-        long elapsed = lastTickGameTime == Long.MIN_VALUE ? 1L : Math.max(1L, now - lastTickGameTime);
-        lastTickGameTime = now;
-
-        if (isHeadReady(now) && !canPushHead(level, pos, state, now)) {
-            freezeTimers(elapsed);
-            setChangedAndSync(now % BLOCKED_SYNC_INTERVAL == 0L);
-            return;
+        if (lastTickGameTime == Long.MIN_VALUE) {
+            lastTickGameTime = now;
+        } else if (now - lastTickGameTime >= STEP_TICKS) {
+            lastTickGameTime = now;
+            if (tickMovementStep(level, pos, state)) {
+                changed = true;
+            }
         }
 
-        if (isHeadReady(now) && pushHead(level, pos, state, now)) {
-            changed = true;
-        }
-
-        if (pullFromInput(level, pos, state, now)) {
-            changed = true;
-        }
-
-        if (changed) {
+        if (changed || needsSync) {
             setChangedAndSync(true);
+            needsSync = false;
         }
     }
 
@@ -222,7 +231,6 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
             return;
         }
 
-        long now = level.getGameTime();
         for (int slot = 0; slot < BUFFER_SLOTS; slot++) {
             ItemStack stack = inventory.getStackInSlot(slot);
             if (stack.isEmpty()) {
@@ -230,50 +238,69 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
                 continue;
             }
 
-            double progress = clamp((now - entryTicks[slot]) / (double) TRAVEL_TICKS, 0.0D, 1.0D);
+            double progress = getRenderProgressForSlot(slot);
             Vec3 visualPosition = computeVisualPosition(state, progress);
             updateClientVisual(slot, stack, visualPosition);
         }
     }
 
-    private boolean canPushHead(Level level, BlockPos pos, BlockState state, long now) {
-        ItemStack head = inventory.getStackInSlot(0);
-        if (head.isEmpty()) {
-            return false;
+    private boolean tickMovementStep(Level level, BlockPos pos, BlockState state) {
+        boolean changed = false;
+
+        if (hasHeadAtOutput() && canPushHead(level, pos, state) && pushHead(level, pos, state)) {
+            changed = true;
         }
-        ItemStack single = head.copy();
-        single.setCount(1);
-        return tryInsertIntoOutput(level, pos, state, single, now, true);
+
+        if (advanceItemsOneStep()) {
+            changed = true;
+        }
+
+        if (canAcceptNewItemAtStep() && pullFromInput(level, pos, state)) {
+            changed = true;
+        }
+
+        return changed;
     }
 
-    private boolean pushHead(Level level, BlockPos pos, BlockState state, long now) {
+    private boolean canPushHead(Level level, BlockPos pos, BlockState state) {
         ItemStack head = inventory.getStackInSlot(0);
         if (head.isEmpty()) {
             return false;
         }
         ItemStack single = head.copy();
         single.setCount(1);
-        if (!tryInsertIntoOutput(level, pos, state, single, now, false)) {
+        return tryInsertIntoOutput(level, pos, state, single, true);
+    }
+
+    private boolean pushHead(Level level, BlockPos pos, BlockState state) {
+        ItemStack head = inventory.getStackInSlot(0);
+        if (head.isEmpty()) {
+            return false;
+        }
+        ItemStack single = head.copy();
+        single.setCount(1);
+        if (!tryInsertIntoOutput(level, pos, state, single, false)) {
             return false;
         }
         inventory.setStackInSlot(0, ItemStack.EMPTY);
-        entryTicks[0] = 0L;
+        renderPositions[0] = -1;
         compactQueue();
+        markDirtyForSync();
         return true;
     }
 
-    private boolean pullFromInput(Level level, BlockPos pos, BlockState state, long now) {
-        if (findFirstEmptySlot() < 0) {
-            return false;
-        }
-
-        BlockPos inputPos = pos.offset(getInputOffset(state));
-        BlockEntity inputBlockEntity = level.getBlockEntity(inputPos);
-        if (inputBlockEntity == null || inputBlockEntity instanceof ConveyorStraightBlockEntity) {
+    private boolean pullFromInput(Level level, BlockPos pos, BlockState state) {
+        if (!canAcceptNewItemAtStep()) {
             return false;
         }
 
         Direction inputDirection = getInputDirection(state);
+        BlockPos inputPos = resolveInputTargetPos(state);
+        BlockEntity inputBlockEntity = level.getBlockEntity(inputPos);
+        if (inputBlockEntity == null) {
+            return false;
+        }
+
         IItemHandler handler = getItemHandler(inputBlockEntity, inputDirection.getOpposite());
         if (handler == null) {
             return false;
@@ -287,7 +314,7 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
 
             ItemStack single = simulated.copy();
             single.setCount(1);
-            if (!enqueueItem(single, now, true)) {
+            if (!enqueueItem(single, true)) {
                 return false;
             }
 
@@ -298,24 +325,21 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
 
             ItemStack extractedSingle = extracted.copy();
             extractedSingle.setCount(1);
-            return enqueueItem(extractedSingle, now, false);
+            return enqueueItem(extractedSingle, false);
         }
 
         return false;
     }
 
-    private boolean tryInsertIntoOutput(Level level, BlockPos pos, BlockState state, ItemStack stack, long now, boolean simulate) {
-        BlockPos outputPos = pos.offset(getOutputOffset(state));
+    private boolean tryInsertIntoOutput(Level level, BlockPos pos, BlockState state, ItemStack stack, boolean simulate) {
+        BlockPos outputPos = resolveOutputTargetPos(state);
         BlockEntity outputBlockEntity = level.getBlockEntity(outputPos);
-        if (outputBlockEntity == null) {
-            return false;
+        if (outputBlockEntity instanceof ConveyorStraightBlockEntity conveyor) {
+            return conveyor.acceptsInputFrom(pos) && conveyor.enqueueItem(stack, simulate);
         }
 
-        if (outputBlockEntity instanceof ConveyorStraightBlockEntity conveyor) {
-            if (!conveyor.acceptsInputFrom(pos)) {
-                return false;
-            }
-            return conveyor.enqueueItem(stack, now, simulate);
+        if (outputBlockEntity == null) {
+            return false;
         }
 
         Direction outputDirection = getOutputDirection(state);
@@ -344,9 +368,13 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
         return unsided.orElse(null);
     }
 
-    private boolean enqueueItem(ItemStack stack, long entryTick, boolean simulate) {
+    private boolean enqueueItem(ItemStack stack, boolean simulate) {
         if (stack.isEmpty()) {
             return true;
+        }
+
+        if (!canAcceptNewItemAtStep()) {
+            return false;
         }
 
         int slot = findFirstEmptySlot();
@@ -358,9 +386,8 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
             ItemStack single = stack.copy();
             single.setCount(1);
             inventory.setStackInSlot(slot, single);
-            entryTicks[slot] = entryTick;
-            compactQueue();
-            setChangedAndSync(true);
+            renderPositions[slot] = 0;
+            markDirtyForSync();
         }
         return true;
     }
@@ -386,8 +413,8 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
             if (write != read) {
                 inventory.setStackInSlot(write, stack);
                 inventory.setStackInSlot(read, ItemStack.EMPTY);
-                entryTicks[write] = entryTicks[read];
-                entryTicks[read] = 0L;
+                renderPositions[write] = renderPositions[read];
+                renderPositions[read] = -1;
                 changed = true;
             }
             write++;
@@ -398,8 +425,8 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
                 inventory.setStackInSlot(slot, ItemStack.EMPTY);
                 changed = true;
             }
-            if (entryTicks[slot] != 0L) {
-                entryTicks[slot] = 0L;
+            if (renderPositions[slot] != -1) {
+                renderPositions[slot] = -1;
                 changed = true;
             }
         }
@@ -412,7 +439,10 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
         for (int slot = 0; slot < inventory.getSlots(); slot++) {
             ItemStack stack = inventory.getStackInSlot(slot);
             if (stack.isEmpty()) {
-                entryTicks[slot] = 0L;
+                if (renderPositions[slot] != -1) {
+                    renderPositions[slot] = -1;
+                    changed = true;
+                }
                 continue;
             }
 
@@ -432,35 +462,152 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
                     break;
                 }
                 inventory.setStackInSlot(emptySlot, single.copy());
-                entryTicks[emptySlot] = entryTicks[slot];
+                renderPositions[emptySlot] = 0;
                 overflow--;
                 changed = true;
             }
         }
 
-        return compactQueue() || changed;
+        if (compactQueue()) {
+            changed = true;
+        }
+        if (normalizeRenderPositions(countNonEmptySlots())) {
+            changed = true;
+        }
+
+        return changed;
     }
 
-    private boolean isHeadReady(long now) {
+    private int countNonEmptySlots() {
+        int count = 0;
+        for (int slot = 0; slot < inventory.getSlots(); slot++) {
+            if (!inventory.getStackInSlot(slot).isEmpty()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private boolean hasHeadAtOutput() {
         if (inventory.getStackInSlot(0).isEmpty()) {
             return false;
         }
-        return now - entryTicks[0] >= TRAVEL_TICKS;
+        return clampRenderPosition(renderPositions[0]) >= BUFFER_SLOTS - 1;
     }
 
-    private void freezeTimers(long ticks) {
-        if (ticks <= 0) {
-            return;
+    private boolean canAcceptNewItemAtStep() {
+        return findFirstEmptySlot() >= 0 && !hasItemAtPosition(0);
+    }
+
+    private boolean hasItemAtPosition(int position) {
+        int clampedPosition = clampRenderPosition(position);
+        if (clampedPosition < 0) {
+            return false;
         }
+
         for (int slot = 0; slot < inventory.getSlots(); slot++) {
-            if (!inventory.getStackInSlot(slot).isEmpty()) {
-                entryTicks[slot] += ticks;
+            if (!inventory.getStackInSlot(slot).isEmpty() && renderPositions[slot] == clampedPosition) {
+                return true;
             }
         }
+        return false;
     }
 
-    private long getCurrentGameTick() {
-        return level == null ? 0L : level.getGameTime();
+    private boolean advanceItemsOneStep() {
+        boolean changed = false;
+        int[] nextPositions = new int[BUFFER_SLOTS];
+        Arrays.fill(nextPositions, -1);
+
+        for (int slot = 0; slot < inventory.getSlots(); slot++) {
+            if (inventory.getStackInSlot(slot).isEmpty()) {
+                continue;
+            }
+
+            int current = clampRenderPosition(renderPositions[slot]);
+            if (current < 0) {
+                current = 0;
+            }
+            int desired = Math.min(BUFFER_SLOTS - 1, current + 1);
+            int next = isPositionTaken(nextPositions, desired) ? current : desired;
+            nextPositions[slot] = next;
+            if (next != renderPositions[slot]) {
+                changed = true;
+            }
+        }
+
+        if (!changed) {
+            return false;
+        }
+
+        for (int slot = 0; slot < BUFFER_SLOTS; slot++) {
+            renderPositions[slot] = inventory.getStackInSlot(slot).isEmpty() ? -1 : nextPositions[slot];
+        }
+        markDirtyForSync();
+        return true;
+    }
+
+    private static boolean isPositionTaken(int[] positions, int target) {
+        for (int position : positions) {
+            if (position == target) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean normalizeRenderPositions(int nonEmptyCount) {
+        boolean changed = false;
+        int previousMaximum = BUFFER_SLOTS - 1;
+        int seen = 0;
+
+        for (int slot = 0; slot < inventory.getSlots(); slot++) {
+            if (inventory.getStackInSlot(slot).isEmpty()) {
+                if (renderPositions[slot] != -1) {
+                    renderPositions[slot] = -1;
+                    changed = true;
+                }
+                continue;
+            }
+
+            int remaining = Math.max(0, nonEmptyCount - seen - 1);
+            int lower = Math.min(BUFFER_SLOTS - 1, remaining);
+            int upper = Math.max(lower, previousMaximum);
+            int clamped = clamp(renderPositions[slot], lower, upper);
+            if (renderPositions[slot] != clamped) {
+                renderPositions[slot] = clamped;
+                changed = true;
+            }
+            previousMaximum = Math.max(0, clamped - 1);
+            seen++;
+        }
+
+        return changed;
+    }
+
+    private double getRenderProgressForSlot(int slot) {
+        if (inventory.getStackInSlot(slot).isEmpty()) {
+            return 0.0D;
+        }
+
+        int position = clampRenderPosition(renderPositions[slot]);
+        if (position < 0) {
+            return 0.0D;
+        }
+
+        // Half-padding on both ends: position i maps to (i + 0.5) / N.
+        return clamp((position + 0.5D) / BUFFER_SLOTS, 0.0D, 1.0D);
+    }
+
+    private int clampRenderPosition(int position) {
+        if (position < 0) {
+            return -1;
+        }
+        return Math.min(BUFFER_SLOTS - 1, position);
+    }
+
+    private void markDirtyForSync() {
+        setChanged();
+        needsSync = true;
     }
 
     private void setChangedAndSync(boolean syncToClient) {
@@ -472,13 +619,17 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
     }
 
     private boolean isPlayerWithinVisualRange(Level level, BlockPos pos) {
-        return level.getNearestPlayer(
-                pos.getX() + 0.5D,
-                pos.getY() + 0.5D,
-                pos.getZ() + 0.5D,
-                VISUAL_RANGE_BLOCKS,
-                false
-        ) != null;
+        double centerX = pos.getX() + 0.5D;
+        double centerY = pos.getY() + 0.5D;
+        double centerZ = pos.getZ() + 0.5D;
+        double maxDistanceSqr = VISUAL_RANGE_BLOCKS * VISUAL_RANGE_BLOCKS;
+
+        for (Player player : level.players()) {
+            if (player.isAlive() && player.distanceToSqr(centerX, centerY, centerZ) <= maxDistanceSqr) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void updateClientVisual(int slot, ItemStack sourceStack, Vec3 position) {
@@ -490,15 +641,22 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
         single.setCount(1);
         ConveyorVisualItemEntity visual = clientVisualItems[slot];
         if (visual == null || !visual.isAlive()) {
-            visual = new ConveyorVisualItemEntity(level, position.x, position.y, position.z, single);
-            clientVisualItems[slot] = visual;
-            level.addFreshEntity(visual);
+            ConveyorVisualItemEntity created = new ConveyorVisualItemEntity(level, position.x, position.y, position.z, single);
+            if (!spawnClientVisual(slot, created)) {
+                clientVisualItems[slot] = null;
+                return;
+            }
+            setVisualBobPhase(created, 0.0F);
+            visual = created;
+            clientVisualItems[slot] = created;
         }
+        setVisualBobPhase(visual, 0.0F);
 
         if (!ItemStack.isSameItemSameTags(visual.getItem(), single)) {
             visual.setItem(single);
         }
 
+        visual.setOldPosAndRot();
         visual.moveTo(position.x, position.y, position.z, 0.0F, 0.0F);
         visual.setDeltaMovement(Vec3.ZERO);
     }
@@ -506,6 +664,9 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
     private void removeClientVisual(int slot) {
         ConveyorVisualItemEntity visual = clientVisualItems[slot];
         if (visual != null) {
+            if (level != null && level.isClientSide) {
+                removeClientEntityById(visual.getId());
+            }
             visual.discard();
             clientVisualItems[slot] = null;
         }
@@ -521,13 +682,13 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
         BlockPos inputOffset = getInputOffset(state);
         BlockPos outputOffset = getOutputOffset(state);
 
-        double startX = worldPosition.getX() + 0.5D + (inputOffset.getX() * 0.45D);
-        double startY = worldPosition.getY() + 0.2D + (inputOffset.getY() * 0.5D);
-        double startZ = worldPosition.getZ() + 0.5D + (inputOffset.getZ() * 0.45D);
+        double startX = worldPosition.getX() + 0.5D + (inputOffset.getX() * 0.5D);
+        double startY = worldPosition.getY() + 0.05D;
+        double startZ = worldPosition.getZ() + 0.5D + (inputOffset.getZ() * 0.5D);
 
-        double endX = worldPosition.getX() + 0.5D + (outputOffset.getX() * 0.45D);
-        double endY = worldPosition.getY() + 0.2D + (outputOffset.getY() * 0.5D);
-        double endZ = worldPosition.getZ() + 0.5D + (outputOffset.getZ() * 0.45D);
+        double endX = worldPosition.getX() + 0.5D + (outputOffset.getX() * 0.5D);
+        double endY = worldPosition.getY() + 0.05D;
+        double endZ = worldPosition.getZ() + 0.5D + (outputOffset.getZ() * 0.5D);
 
         return new Vec3(
                 startX + ((endX - startX) * progress),
@@ -540,13 +701,100 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
         return Math.max(min, Math.min(max, value));
     }
 
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private boolean spawnClientVisual(int slot, ConveyorVisualItemEntity visual) {
+        if (level == null || !level.isClientSide) {
+            return false;
+        }
+
+        int id = visualEntityId(slot);
+        visual.setId(id);
+
+        if (addClientEntityById(id, visual)) {
+            return true;
+        }
+
+        return level.addFreshEntity(visual);
+    }
+
+    private int visualEntityId(int slot) {
+        long seed = worldPosition.asLong() ^ (0x9E3779B97F4A7C15L * (slot + 1L));
+        int hash = (int) (seed ^ (seed >>> 32));
+        return hash | Integer.MIN_VALUE;
+    }
+
+    private boolean addClientEntityById(int id, Entity entity) {
+        if (level == null || !level.isClientSide) {
+            return false;
+        }
+
+        resolveClientEntityMethods();
+        if (clientPutNonPlayerEntityMethod == null) {
+            return false;
+        }
+
+        try {
+            clientPutNonPlayerEntityMethod.invoke(level, id, entity);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private void removeClientEntityById(int id) {
+        if (level == null || !level.isClientSide) {
+            return;
+        }
+
+        resolveClientEntityMethods();
+        if (clientRemoveEntityMethod == null) {
+            return;
+        }
+
+        try {
+            clientRemoveEntityMethod.invoke(level, id, Entity.RemovalReason.DISCARDED);
+        } catch (Throwable ignored) {
+            // Best effort.
+        }
+    }
+
+    private void resolveClientEntityMethods() {
+        if (resolvedClientEntityMethods || level == null) {
+            return;
+        }
+
+        resolvedClientEntityMethods = true;
+        Class<?> levelClass = level.getClass();
+
+        try {
+            clientPutNonPlayerEntityMethod = levelClass.getMethod("putNonPlayerEntity", int.class, Entity.class);
+        } catch (NoSuchMethodException ignored) {
+            clientPutNonPlayerEntityMethod = null;
+        }
+
+        try {
+            clientRemoveEntityMethod = levelClass.getMethod("removeEntity", int.class, Entity.RemovalReason.class);
+        } catch (NoSuchMethodException ignored) {
+            clientRemoveEntityMethod = null;
+        }
+    }
+
     private boolean acceptsInputFrom(BlockPos sourcePos) {
         BlockState state = getBlockState();
         if (!(state.getBlock() instanceof ConveyorStraightBlock)) {
             return false;
         }
         BlockPos expectedInputPos = worldPosition.offset(getInputOffset(state));
-        return expectedInputPos.equals(sourcePos);
+        if (expectedInputPos.equals(sourcePos)) {
+            return true;
+        }
+
+        return expectedInputPos.getX() == sourcePos.getX()
+                && expectedInputPos.getZ() == sourcePos.getZ()
+                && Math.abs(expectedInputPos.getY() - sourcePos.getY()) <= 1;
     }
 
     private Direction getInputDirection(BlockState state) {
@@ -585,6 +833,76 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
         };
     }
 
+    private BlockPos resolveInputTargetPos(BlockState state) {
+        Direction input = getInputDirection(state);
+        BlockPos sameLevelBehind = worldPosition.relative(input);
+        BlockPos defaultInputPos = worldPosition.offset(getInputOffset(state));
+        ConveyorStraightBlock.ConveyorShape shape = state.getValue(ConveyorStraightBlock.SHAPE);
+
+        return switch (shape) {
+            case STRAIGHT, LEFT, RIGHT, UP -> {
+                BlockPos belowBehind = sameLevelBehind.below();
+                if (isSpecificConveyorPointedAtThis(belowBehind, ConveyorStraightBlock.ConveyorShape.UP)) {
+                    yield belowBehind;
+                }
+                yield defaultInputPos;
+            }
+            case DOWN -> {
+                yield defaultInputPos;
+            }
+        };
+    }
+
+    private BlockPos resolveOutputTargetPos(BlockState state) {
+        Direction output = getOutputDirection(state);
+        BlockPos sameLevelFront = worldPosition.relative(output);
+        BlockPos defaultOutputPos = worldPosition.offset(getOutputOffset(state));
+        ConveyorStraightBlock.ConveyorShape shape = state.getValue(ConveyorStraightBlock.SHAPE);
+
+        return switch (shape) {
+            case STRAIGHT, LEFT, RIGHT -> {
+                BlockPos belowFront = sameLevelFront.below();
+                if (isSpecificConveyorAcceptingFromThis(belowFront, ConveyorStraightBlock.ConveyorShape.DOWN)) {
+                    yield belowFront;
+                }
+                yield defaultOutputPos;
+            }
+            case UP, DOWN -> defaultOutputPos;
+        };
+    }
+
+    private boolean isSpecificConveyorPointedAtThis(BlockPos conveyorPos, ConveyorStraightBlock.ConveyorShape shape) {
+        if (level == null) {
+            return false;
+        }
+
+        BlockState state = level.getBlockState(conveyorPos);
+        if (!(state.getBlock() instanceof ConveyorStraightBlock conveyorBlock) || state.getValue(ConveyorStraightBlock.SHAPE) != shape) {
+            return false;
+        }
+
+        Direction toThis = Direction.fromDelta(
+                Integer.signum(worldPosition.getX() - conveyorPos.getX()),
+                0,
+                Integer.signum(worldPosition.getZ() - conveyorPos.getZ())
+        );
+        return toThis != null && toThis.getAxis().isHorizontal() && conveyorBlock.getOutputDirection(state) == toThis;
+    }
+
+    private boolean isSpecificConveyorAcceptingFromThis(BlockPos conveyorPos, ConveyorStraightBlock.ConveyorShape shape) {
+        if (level == null) {
+            return false;
+        }
+
+        BlockState state = level.getBlockState(conveyorPos);
+        if (!(state.getBlock() instanceof ConveyorStraightBlock) || state.getValue(ConveyorStraightBlock.SHAPE) != shape) {
+            return false;
+        }
+
+        BlockEntity blockEntity = level.getBlockEntity(conveyorPos);
+        return blockEntity instanceof ConveyorStraightBlockEntity conveyor && conveyor.acceptsInputFrom(worldPosition);
+    }
+
     private static class ConveyorVisualItemEntity extends ItemEntity {
         private ConveyorVisualItemEntity(Level level, double x, double y, double z, ItemStack stack) {
             super(level, x, y, z, stack.copy());
@@ -594,16 +912,54 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
             this.setPickUpDelay(32767);
             this.setInvulnerable(true);
             this.setDeltaMovement(Vec3.ZERO);
+            this.setOldPosAndRot();
         }
 
         @Override
         public void tick() {
-            // This entity is client-only visual state and is moved by conveyor dead reckoning.
+            // Client-only visual. Conveyor code owns movement.
         }
 
         @Override
         public boolean isPickable() {
             return false;
+        }
+
+        @Override
+        public float getSpin(float partialTicks) {
+            return 0.0F;
+        }
+    }
+
+    private void setVisualBobPhase(ConveyorVisualItemEntity visual, float bobOffs) {
+        if (visual == null) {
+            return;
+        }
+
+        if (!resolvedItemBobField) {
+            resolvedItemBobField = true;
+            try {
+                itemBobOffsField = ItemEntity.class.getDeclaredField("bobOffs");
+            } catch (NoSuchFieldException first) {
+                try {
+                    itemBobOffsField = ItemEntity.class.getDeclaredField("f_31983_");
+                } catch (NoSuchFieldException ignored) {
+                    itemBobOffsField = null;
+                }
+            }
+            if (itemBobOffsField != null) {
+                itemBobOffsField.setAccessible(true);
+            }
+        }
+
+        if (itemBobOffsField == null) {
+            return;
+        }
+
+        try {
+            itemBobOffsField.setFloat(visual, bobOffs);
+        } catch (IllegalAccessException ignored) {
+            // If this fails in runtime, fallback is vanilla item bob behavior.
         }
     }
 }
