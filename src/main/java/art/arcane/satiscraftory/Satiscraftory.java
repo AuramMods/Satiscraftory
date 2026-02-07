@@ -1,12 +1,18 @@
 package art.arcane.satiscraftory;
 
+import art.arcane.satiscraftory.block.ConveyorStraightBlock;
+import art.arcane.satiscraftory.block.entity.ConveyorStraightBlockEntity;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -22,11 +28,19 @@ public class Satiscraftory {
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, MODID);
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
+    public static final RegistryObject<Block> CONVEYOR_STRAIGHT = BLOCKS.register("conveyor_straight", () ->
+            new ConveyorStraightBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noOcclusion()));
+    public static final RegistryObject<Item> CONVEYOR_STRAIGHT_ITEM = ITEMS.register("conveyor_straight", () ->
+            new BlockItem(CONVEYOR_STRAIGHT.get(), new Item.Properties()));
+    public static final RegistryObject<BlockEntityType<ConveyorStraightBlockEntity>> CONVEYOR_STRAIGHT_BLOCK_ENTITY =
+            BLOCK_ENTITIES.register("conveyor_straight", () ->
+                    BlockEntityType.Builder.of(ConveyorStraightBlockEntity::new, CONVEYOR_STRAIGHT.get()).build(null));
+
     public static final RegistryObject<CreativeModeTab> TAB = CREATIVE_TABS.register(MODID+"_tab", () -> CreativeModeTab.builder()
             .title(Component.literal("Satiscraftory"))
-            //.icon(() -> new ItemStack(ENDER_JADE.get()))
+            .icon(() -> new ItemStack(CONVEYOR_STRAIGHT_ITEM.get()))
             .displayItems((params, output) -> {
-                
+                output.accept(CONVEYOR_STRAIGHT_ITEM.get());
             })
             .build());
 
