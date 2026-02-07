@@ -1,7 +1,7 @@
 {
   "variants": {
     "facing=north": {
-      "model": "satiscraftory:block/conveyor_straight",
+      "model": "satiscraftory:block/conveyor_right",
       "y": 90
     },
     "facing=east": {

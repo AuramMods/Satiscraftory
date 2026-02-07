@@ -1,0 +1,81 @@
+{
+	"format_version": "1.9.0",
+	"credit": "Made with Blockbench",
+	"textures": {
+		"0": "satiscraftory:block/conveyor_belt",
+		"1": "satiscraftory:block/conveyor_bar",
+		"particle": "satiscraftory:block/conveyor_belt"
+	},
+	"elements": [
+		{
+			"name": "conveyor_bar_left",
+			"from": [0, 0, 0],
+			"to": [2, 2, 16],
+			"rotation": {"angle": 0, "axis": "y", "origin": [0, 0, 14]},
+			"faces": {
+				"north": {"uv": [0, 0, 2, 2], "texture": "#1"},
+				"east": {"uv": [0, 0, 8, 2], "texture": "#1"},
+				"south": {"uv": [0, 0, 2, 2], "texture": "#1"},
+				"west": {"uv": [0, 0, 8, 2], "texture": "#1"},
+				"up": {"uv": [0, 0, 2, 12], "texture": "#1"},
+				"down": {"uv": [0, 0, 2, 12], "texture": "#1"}
+			}
+		},
+		{
+			"name": "conveyor_bar_right",
+			"from": [2, 0, 0],
+			"to": [16, 2, 2],
+			"rotation": {"angle": 0, "axis": "y", "origin": [16, 0, 2]},
+			"faces": {
+				"north": {"uv": [0, 0, 8, 2], "texture": "#1"},
+				"east": {"uv": [0, 0, 2, 2], "texture": "#1"},
+				"south": {"uv": [0, 0, 8, 2], "texture": "#1"},
+				"west": {"uv": [0, 0, 2, 2], "texture": "#1"},
+				"up": {"uv": [0, 0, 2, 12], "rotation": 270, "texture": "#1"},
+				"down": {"uv": [0, 0, 2, 12], "rotation": 90, "texture": "#1"}
+			}
+		},
+		{
+			"name": "conveyor_bar_right",
+			"from": [14, 0, 14],
+			"to": [16, 2, 16],
+			"rotation": {"angle": 0, "axis": "y", "origin": [28, 0, 16]},
+			"faces": {
+				"north": {"uv": [2, 4, 4, 6], "texture": "#1"},
+				"east": {"uv": [0, 4, 2, 6], "texture": "#1"},
+				"south": {"uv": [6, 4, 8, 6], "texture": "#1"},
+				"west": {"uv": [4, 4, 6, 6], "texture": "#1"},
+				"up": {"uv": [4, 4, 2, 2], "texture": "#1"},
+				"down": {"uv": [6, 2, 4, 4], "texture": "#1"}
+			}
+		},
+		{
+			"name": "conveyor_belt",
+			"from": [2, 0, 2],
+			"to": [14, 1, 16],
+			"rotation": {"angle": 0, "axis": "y", "origin": [2, 0, 14]},
+			"faces": {
+				"north": {"uv": [0, 2, 12, 2], "texture": "#0"},
+				"east": {"uv": [0, 2, 16, 2], "texture": "#0"},
+				"south": {"uv": [0, 4, 16, 5], "texture": "#0"},
+				"west": {"uv": [0, 2, 16, 2], "texture": "#0"},
+				"up": {"uv": [0, 0, 16, 16], "texture": "#0"},
+				"down": {"uv": [0, 0, 16, 16], "texture": "#0"}
+			}
+		},
+		{
+			"name": "conveyor_belt",
+			"from": [14, 0, 2],
+			"to": [16, 1, 14],
+			"rotation": {"angle": 0, "axis": "y", "origin": [14, 0, 14]},
+			"faces": {
+				"north": {"uv": [0, 2, 12, 2], "texture": "#0"},
+				"east": {"uv": [14, 0, 16, 14], "texture": "#0"},
+				"south": {"uv": [0, 4, 14, 5], "texture": "#0"},
+				"west": {"uv": [0, 2, 16, 2], "texture": "#0"},
+				"up": {"uv": [2, 14, 14, 16], "rotation": 90, "texture": "#0"},
+				"down": {"uv": [14, 0, 16, 14], "texture": "#0"}
+			}
+		}
+	]
+}
