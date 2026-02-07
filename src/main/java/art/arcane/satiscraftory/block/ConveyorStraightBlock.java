@@ -45,6 +45,7 @@ public class ConveyorStraightBlock extends BaseEntityBlock implements ConveyorCo
             Block.box(2.0D, 0.0D, 0.0D, 14.0D, 1.0D, 16.0D)
     );
     private static final VoxelShape SHAPE_CORNER = Block.box(0.0D, 0.0D, 0.0D, 16.0D, 2.0D, 16.0D);
+    private final long travelTicks;
 
     public enum ConveyorShape implements StringRepresentable {
         STRAIGHT("straight"),
@@ -76,10 +77,19 @@ public class ConveyorStraightBlock extends BaseEntityBlock implements ConveyorCo
     }
 
     public ConveyorStraightBlock(BlockBehaviour.Properties properties) {
+        this(properties, 5L);
+    }
+
+    public ConveyorStraightBlock(BlockBehaviour.Properties properties, long travelTicks) {
         super(properties);
+        this.travelTicks = Math.max(1L, travelTicks);
         this.registerDefaultState(this.stateDefinition.any()
                 .setValue(FACING, Direction.NORTH)
                 .setValue(SHAPE, ConveyorShape.STRAIGHT));
+    }
+
+    public long getTravelTicks(BlockState state) {
+        return travelTicks;
     }
 
     @Override

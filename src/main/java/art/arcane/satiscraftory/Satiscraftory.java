@@ -29,7 +29,10 @@ public class Satiscraftory {
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
     public static final RegistryObject<Block> CONVEYOR = BLOCKS.register("conveyor", () ->
-            new ConveyorStraightBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noOcclusion()));
+            new ConveyorStraightBlock(
+                    BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noOcclusion(),
+                    5L
+            ));
     public static final RegistryObject<Item> CONVEYOR_ITEM = ITEMS.register("conveyor", () ->
             new BlockItem(CONVEYOR.get(), new Item.Properties()));
     public static final RegistryObject<BlockEntityType<ConveyorStraightBlockEntity>> CONVEYOR_BLOCK_ENTITY =
