@@ -1,5 +1,6 @@
 package art.arcane.satiscraftory.block;
 
+import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.block.entity.ConveyorStraightBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -15,6 +16,8 @@ import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityTicker;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -46,7 +49,9 @@ public class ConveyorStraightBlock extends BaseEntityBlock implements ConveyorCo
     public enum ConveyorShape implements StringRepresentable {
         STRAIGHT("straight"),
         LEFT("left"),
-        RIGHT("right");
+        RIGHT("right"),
+        UP("up"),
+        DOWN("down");
 
         private final String name;
 
@@ -55,10 +60,13 @@ public class ConveyorStraightBlock extends BaseEntityBlock implements ConveyorCo
         }
 
         public ConveyorShape oppositeTurn() {
-            if (this == STRAIGHT) {
-                return STRAIGHT;
+            if (this == LEFT) {
+                return RIGHT;
             }
-            return this == LEFT ? RIGHT : LEFT;
+            if (this == RIGHT) {
+                return LEFT;
+            }
+            return this;
         }
 
         @Override
@@ -174,32 +182,33 @@ public class ConveyorStraightBlock extends BaseEntityBlock implements ConveyorCo
             return;
         }
 
-        Direction inputDirection = connectable.getInputDirection(placedState);
-        Direction outputDirection = connectable.getOutputDirection(placedState);
-
-        BlockPos inputNeighborPos = placedPos.relative(inputDirection);
+        BlockPos inputOffset = getInputOffset(placedState);
+        BlockPos outputOffset = getOutputOffset(placedState);
+        BlockPos inputNeighborPos = placedPos.offset(inputOffset);
         BlockState inputNeighborState = level.getBlockState(inputNeighborPos);
         if (inputNeighborState.getBlock() instanceof ConveyorConnectable inputNeighbor) {
-            Direction neighborOutputDirection = directionFromTo(inputNeighborPos, placedPos);
-            if (neighborOutputDirection != null && neighborOutputDirection.getAxis().isHorizontal()) {
-                BlockState updatedInputNeighbor = inputNeighbor.withOutputConnection(inputNeighborState, neighborOutputDirection);
+            BlockPos neighborOutputOffset = toOffset(inputNeighborPos, placedPos);
+            if (neighborOutputOffset != null && inputNeighborState.getBlock() instanceof ConveyorStraightBlock inputBlock) {
+                BlockState updatedInputNeighbor = inputBlock.withOutputOffset(inputNeighborState, neighborOutputOffset);
                 if (!updatedInputNeighbor.equals(inputNeighborState)) {
                     level.setBlock(inputNeighborPos, updatedInputNeighbor, Block.UPDATE_ALL);
                 }
             }
         }
 
-        BlockPos outputNeighborPos = placedPos.relative(outputDirection);
+        BlockPos outputNeighborPos = placedPos.offset(outputOffset);
         BlockState outputNeighborState = level.getBlockState(outputNeighborPos);
-        if (outputNeighborState.getBlock() instanceof ConveyorConnectable outputNeighbor) {
-            Direction neighborInputDirection = directionFromTo(outputNeighborPos, placedPos);
-            if (neighborInputDirection != null && neighborInputDirection.getAxis().isHorizontal()) {
-                BlockState updatedOutputNeighbor = outputNeighbor.withInputConnection(outputNeighborState, neighborInputDirection);
+        if (outputNeighborState.getBlock() instanceof ConveyorConnectable) {
+            BlockPos neighborInputOffset = toOffset(outputNeighborPos, placedPos);
+            if (neighborInputOffset != null && outputNeighborState.getBlock() instanceof ConveyorStraightBlock outputBlock) {
+                BlockState updatedOutputNeighbor = outputBlock.withInputOffset(outputNeighborState, neighborInputOffset);
                 if (!updatedOutputNeighbor.equals(outputNeighborState)) {
                     level.setBlock(outputNeighborPos, updatedOutputNeighbor, Block.UPDATE_ALL);
                 }
             }
         }
+
+        refreshSlopeShapesAround(level, placedPos);
     }
 
     private static List<NeighborConnection> collectNeighborConnections(Level level, BlockPos pos) {
@@ -337,6 +346,72 @@ public class ConveyorStraightBlock extends BaseEntityBlock implements ConveyorCo
         return Direction.fromDelta(x, y, z);
     }
 
+    private static BlockPos toOffset(BlockPos from, BlockPos to) {
+        int x = to.getX() - from.getX();
+        int y = to.getY() - from.getY();
+        int z = to.getZ() - from.getZ();
+        if (Math.abs(x) > 1 || Math.abs(y) > 1 || Math.abs(z) > 1) {
+            return null;
+        }
+        return new BlockPos(x, y, z);
+    }
+
+    private void applySlopeShapeFromVerticalNeighbor(Level level, BlockPos pos, BlockState state) {
+        Direction outputDirection = getOutputDirection(state);
+        BlockPos forwardUp = pos.relative(outputDirection).above();
+        BlockPos behindUp = pos.relative(outputDirection.getOpposite()).above();
+        BlockState updated = state;
+
+        if (level.getBlockState(forwardUp).getBlock() instanceof ConveyorConnectable) {
+            updated = state.setValue(SHAPE, ConveyorShape.UP);
+        } else if (level.getBlockState(behindUp).getBlock() instanceof ConveyorConnectable) {
+            updated = state.setValue(SHAPE, ConveyorShape.DOWN);
+        } else if (state.getValue(SHAPE) == ConveyorShape.UP || state.getValue(SHAPE) == ConveyorShape.DOWN) {
+            updated = state.setValue(SHAPE, ConveyorShape.STRAIGHT);
+        }
+
+        if (!updated.equals(state)) {
+            level.setBlock(pos, updated, Block.UPDATE_ALL);
+        }
+    }
+
+    private void refreshSlopeShapesAround(Level level, BlockPos pos) {
+        refreshSlopeShapeAt(level, pos);
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            refreshSlopeShapeAt(level, pos.relative(direction));
+            refreshSlopeShapeAt(level, pos.relative(direction).above());
+            refreshSlopeShapeAt(level, pos.relative(direction).below());
+        }
+    }
+
+    private void refreshSlopeShapeAt(Level level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        if (state.getBlock() instanceof ConveyorStraightBlock) {
+            applySlopeShapeFromVerticalNeighbor(level, pos, state);
+        }
+    }
+
+    private BlockPos getInputOffset(BlockState state) {
+        Direction output = getOutputDirection(state);
+        Direction input = getInputDirection(state);
+        if (state.getValue(SHAPE) == ConveyorShape.UP) {
+            return new BlockPos(output.getOpposite().getStepX(), 0, output.getOpposite().getStepZ());
+        }
+        if (state.getValue(SHAPE) == ConveyorShape.DOWN) {
+            return new BlockPos(output.getOpposite().getStepX(), 1, output.getOpposite().getStepZ());
+        }
+        return new BlockPos(input.getStepX(), 0, input.getStepZ());
+    }
+
+    private BlockPos getOutputOffset(BlockState state) {
+        Direction output = getOutputDirection(state);
+        return switch (state.getValue(SHAPE)) {
+            case UP -> new BlockPos(output.getStepX(), 1, output.getStepZ());
+            case DOWN -> new BlockPos(output.getStepX(), 0, output.getStepZ());
+            default -> new BlockPos(output.getStepX(), 0, output.getStepZ());
+        };
+    }
+
     @Override
     public Direction getInputDirection(BlockState state) {
         Direction output = getOutputDirection(state);
@@ -344,6 +419,7 @@ public class ConveyorStraightBlock extends BaseEntityBlock implements ConveyorCo
             case STRAIGHT -> output.getOpposite();
             case LEFT -> output.getClockWise();
             case RIGHT -> output.getCounterClockWise();
+            case UP, DOWN -> output.getOpposite();
         };
     }
 
@@ -356,6 +432,9 @@ public class ConveyorStraightBlock extends BaseEntityBlock implements ConveyorCo
     public BlockState withInputConnection(BlockState state, Direction inputDirection) {
         Direction outputDirection = getOutputDirection(state);
         ConveyorShape nextShape = shapeFromInputAndOutput(inputDirection, outputDirection);
+        if (state.getValue(SHAPE) == ConveyorShape.UP || state.getValue(SHAPE) == ConveyorShape.DOWN) {
+            return state.setValue(SHAPE, state.getValue(SHAPE));
+        }
         return state.setValue(SHAPE, nextShape);
     }
 
@@ -366,6 +445,45 @@ public class ConveyorStraightBlock extends BaseEntityBlock implements ConveyorCo
         return state
                 .setValue(FACING, outputDirection.getOpposite())
                 .setValue(SHAPE, nextShape);
+    }
+
+    private BlockState withOutputOffset(BlockState state, BlockPos outputOffset) {
+        Direction outputDirection = Direction.fromDelta(outputOffset.getX(), 0, outputOffset.getZ());
+        if (outputDirection == null || !outputDirection.getAxis().isHorizontal()) {
+            return state;
+        }
+
+        ConveyorShape shape;
+        if (outputOffset.getY() > 0) {
+            shape = ConveyorShape.UP;
+        } else if (outputOffset.getY() < 0) {
+            shape = ConveyorShape.STRAIGHT;
+        } else {
+            Direction inputDirection = getInputDirection(state);
+            shape = shapeFromInputAndOutput(inputDirection, outputDirection);
+        }
+
+        return state
+                .setValue(FACING, outputDirection.getOpposite())
+                .setValue(SHAPE, shape);
+    }
+
+    private BlockState withInputOffset(BlockState state, BlockPos inputOffset) {
+        Direction inputDirection = Direction.fromDelta(inputOffset.getX(), 0, inputOffset.getZ());
+        if (inputDirection == null || !inputDirection.getAxis().isHorizontal()) {
+            return state;
+        }
+
+        if (inputOffset.getY() > 0) {
+            return state.setValue(SHAPE, ConveyorShape.DOWN);
+        }
+        if (inputOffset.getY() < 0) {
+            return state.setValue(SHAPE, ConveyorShape.UP);
+        }
+
+        Direction outputDirection = getOutputDirection(state);
+        ConveyorShape shape = shapeFromInputAndOutput(inputDirection, outputDirection);
+        return state.setValue(SHAPE, shape);
     }
 
     private static ConveyorShape shapeFromInputAndOutput(Direction inputDirection, Direction outputDirection) {
@@ -384,6 +502,14 @@ public class ConveyorStraightBlock extends BaseEntityBlock implements ConveyorCo
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new ConveyorStraightBlockEntity(pos, state);
+    }
+
+    @Override
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> blockEntityType) {
+        if (level.isClientSide) {
+            return createTickerHelper(blockEntityType, Satiscraftory.CONVEYOR_BLOCK_ENTITY.get(), ConveyorStraightBlockEntity::clientTick);
+        }
+        return createTickerHelper(blockEntityType, Satiscraftory.CONVEYOR_BLOCK_ENTITY.get(), ConveyorStraightBlockEntity::serverTick);
     }
 
     @Override
