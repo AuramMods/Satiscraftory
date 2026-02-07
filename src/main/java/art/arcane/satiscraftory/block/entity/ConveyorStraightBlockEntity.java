@@ -26,7 +26,7 @@ public class ConveyorStraightBlockEntity extends BlockEntity {
     private LazyOptional<IItemHandler> inventoryCapability = LazyOptional.of(() -> inventory);
 
     public ConveyorStraightBlockEntity(BlockPos pos, BlockState blockState) {
-        super(Satiscraftory.CONVEYOR_STRAIGHT_BLOCK_ENTITY.get(), pos, blockState);
+        super(Satiscraftory.CONVEYOR_BLOCK_ENTITY.get(), pos, blockState);
     }
 
     @Override

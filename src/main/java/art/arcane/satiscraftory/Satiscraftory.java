@@ -28,19 +28,19 @@ public class Satiscraftory {
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, MODID);
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
 
-    public static final RegistryObject<Block> CONVEYOR_STRAIGHT = BLOCKS.register("conveyor_straight", () ->
+    public static final RegistryObject<Block> CONVEYOR = BLOCKS.register("conveyor", () ->
             new ConveyorStraightBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noOcclusion()));
-    public static final RegistryObject<Item> CONVEYOR_STRAIGHT_ITEM = ITEMS.register("conveyor_straight", () ->
-            new BlockItem(CONVEYOR_STRAIGHT.get(), new Item.Properties()));
-    public static final RegistryObject<BlockEntityType<ConveyorStraightBlockEntity>> CONVEYOR_STRAIGHT_BLOCK_ENTITY =
-            BLOCK_ENTITIES.register("conveyor_straight", () ->
-                    BlockEntityType.Builder.of(ConveyorStraightBlockEntity::new, CONVEYOR_STRAIGHT.get()).build(null));
+    public static final RegistryObject<Item> CONVEYOR_ITEM = ITEMS.register("conveyor", () ->
+            new BlockItem(CONVEYOR.get(), new Item.Properties()));
+    public static final RegistryObject<BlockEntityType<ConveyorStraightBlockEntity>> CONVEYOR_BLOCK_ENTITY =
+            BLOCK_ENTITIES.register("conveyor", () ->
+                    BlockEntityType.Builder.of(ConveyorStraightBlockEntity::new, CONVEYOR.get()).build(null));
 
     public static final RegistryObject<CreativeModeTab> TAB = CREATIVE_TABS.register(MODID+"_tab", () -> CreativeModeTab.builder()
             .title(Component.literal("Satiscraftory"))
-            .icon(() -> new ItemStack(CONVEYOR_STRAIGHT_ITEM.get()))
+            .icon(() -> new ItemStack(CONVEYOR_ITEM.get()))
             .displayItems((params, output) -> {
-                output.accept(CONVEYOR_STRAIGHT_ITEM.get());
+                output.accept(CONVEYOR_ITEM.get());
             })
             .build());
 

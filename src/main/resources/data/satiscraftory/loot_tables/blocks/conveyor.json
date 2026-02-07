@@ -6,7 +6,7 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "satiscraftory:conveyor_straight"
+          "name": "satiscraftory:conveyor"
         }
       ],
       "conditions": [

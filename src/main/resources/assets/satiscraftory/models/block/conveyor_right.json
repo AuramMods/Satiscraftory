@@ -49,33 +49,33 @@
 				"down": {"uv": [6, 2, 4, 4], "texture": "#1"}
 			}
 		},
-		{
-			"name": "conveyor_belt",
-			"from": [2, 0, 2],
-			"to": [14, 1, 16],
-			"rotation": {"angle": 0, "axis": "y", "origin": [2, 0, 14]},
-			"faces": {
-				"north": {"uv": [0, 2, 12, 2], "texture": "#0"},
-				"east": {"uv": [0, 2, 16, 2], "texture": "#0"},
-				"south": {"uv": [0, 4, 16, 5], "texture": "#0"},
-				"west": {"uv": [0, 2, 16, 2], "texture": "#0"},
-				"up": {"uv": [0, 0, 16, 16], "texture": "#0"},
-				"down": {"uv": [0, 0, 16, 16], "texture": "#0"}
+			{
+				"name": "conveyor_belt",
+				"from": [2, 0, 2],
+				"to": [14, 1, 16],
+				"rotation": {"angle": 0, "axis": "y", "origin": [2, 0, 14]},
+				"faces": {
+					"north": {"uv": [0, 2, 12, 2], "texture": "#0"},
+					"east": {"uv": [0, 2, 16, 2], "texture": "#0"},
+					"south": {"uv": [0, 4, 16, 5], "texture": "#0"},
+					"west": {"uv": [0, 2, 16, 2], "texture": "#0"},
+					"up": {"uv": [0, 0, 16, 16], "rotation": 180, "texture": "#0"},
+					"down": {"uv": [0, 0, 16, 16], "texture": "#0"}
+				}
+			},
+			{
+				"name": "conveyor_belt",
+				"from": [14, 0, 2],
+				"to": [16, 1, 14],
+				"rotation": {"angle": 0, "axis": "y", "origin": [14, 0, 14]},
+				"faces": {
+					"north": {"uv": [0, 2, 12, 2], "texture": "#0"},
+					"east": {"uv": [14, 0, 16, 14], "texture": "#0"},
+					"south": {"uv": [0, 4, 14, 5], "texture": "#0"},
+					"west": {"uv": [0, 2, 16, 2], "texture": "#0"},
+					"up": {"uv": [2, 14, 14, 16], "rotation": 270, "texture": "#0"},
+					"down": {"uv": [14, 0, 16, 14], "texture": "#0"}
+				}
 			}
-		},
-		{
-			"name": "conveyor_belt",
-			"from": [14, 0, 2],
-			"to": [16, 1, 14],
-			"rotation": {"angle": 0, "axis": "y", "origin": [14, 0, 14]},
-			"faces": {
-				"north": {"uv": [0, 2, 12, 2], "texture": "#0"},
-				"east": {"uv": [14, 0, 16, 14], "texture": "#0"},
-				"south": {"uv": [0, 4, 14, 5], "texture": "#0"},
-				"west": {"uv": [0, 2, 16, 2], "texture": "#0"},
-				"up": {"uv": [2, 14, 14, 16], "rotation": 90, "texture": "#0"},
-				"down": {"uv": [14, 0, 16, 14], "texture": "#0"}
-			}
-		}
 	]
 }
