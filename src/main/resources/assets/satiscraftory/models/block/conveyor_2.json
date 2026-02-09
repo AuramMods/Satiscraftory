@@ -1,0 +1,52 @@
+{
+	"format_version": "1.21.11",
+	"credit": "Made with Blockbench",
+	"parent": "minecraft:block/block",
+	"textures": {
+		"x": "satiscraftory:block/conveyor_1"
+	},
+	"elements": [
+		{
+			"name": "rail_left",
+			"from": [0, 0, 0],
+			"to": [2, 2, 16],
+			"rotation": {"angle": 0, "axis": "y", "origin": [0, 0, 14]},
+			"faces": {
+				"north": {"uv": [0, 0, 1, 1], "texture": "#x"},
+				"east": {"uv": [1, 1, 2, 9], "rotation": 90, "texture": "#x"},
+				"south": {"uv": [0, 9, 1, 10], "texture": "#x"},
+				"west": {"uv": [1, 1, 2, 9], "rotation": 90, "texture": "#x"},
+				"up": {"uv": [0, 1, 1, 9], "texture": "#x"},
+				"down": {"uv": [0, 1, 1, 9], "texture": "#x"}
+			}
+		},
+		{
+			"name": "rail_right",
+			"from": [14, 0, 0],
+			"to": [16, 2, 16],
+			"rotation": {"angle": 0, "axis": "y", "origin": [14, 0, 14]},
+			"faces": {
+				"north": {"uv": [0, 0, 1, 1], "texture": "#x"},
+				"east": {"uv": [0, 1, 1, 9], "rotation": 90, "texture": "#x"},
+				"south": {"uv": [0, 9, 1, 10], "texture": "#x"},
+				"west": {"uv": [0, 1, 1, 9], "rotation": 90, "texture": "#x"},
+				"up": {"uv": [1, 1, 2, 9], "texture": "#x"},
+				"down": {"uv": [1, 1, 2, 9], "texture": "#x"}
+			}
+		},
+		{
+			"name": "belt",
+			"from": [2, 0, 0],
+			"to": [14, 1, 16],
+			"rotation": {"angle": 0, "axis": "y", "origin": [2, 0, 14]},
+			"faces": {
+				"north": {"uv": [2, 8.5, 10, 9], "texture": "#x"},
+				"east": {"uv": [0, 2, 16, 2], "texture": "#missing"},
+				"south": {"uv": [2, 1.5, 10, 1], "texture": "#x"},
+				"west": {"uv": [0, 2, 16, 2], "texture": "#missing"},
+				"up": {"uv": [2, 1, 10, 9], "texture": "#x"},
+				"down": {"uv": [2, 1.5, 10, 8.5], "texture": "#x"}
+			}
+		}
+	]
+}
