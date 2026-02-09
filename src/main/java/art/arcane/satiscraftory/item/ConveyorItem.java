@@ -1,8 +1,8 @@
 package art.arcane.satiscraftory.item;
 
-import art.arcane.satiscraftory.block.SplineExperimentConveyorBlock;
+import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.ConveyorConnectable;
-import art.arcane.satiscraftory.block.entity.SplineExperimentConveyorBlockEntity;
+import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -26,12 +26,12 @@ import net.minecraftforge.common.capabilities.ForgeCapabilities;
 
 import javax.annotation.Nullable;
 
-public class SplineExperimentConveyorItem extends BlockItem {
+public class ConveyorItem extends BlockItem {
     private static final String PLACEMENT_STATE_TAG = "satiscraftory_spline_experiment_state";
     private static final String START_POS_TAG = "start_pos";
     private static final String START_DIMENSION_TAG = "start_dimension";
 
-    public SplineExperimentConveyorItem(Block block, Properties properties) {
+    public ConveyorItem(Block block, Properties properties) {
         super(block, properties);
     }
 
@@ -87,8 +87,8 @@ public class SplineExperimentConveyorItem extends BlockItem {
         Direction startFacing = resolveStartFacing(level, startPos, selectedPos, player.getDirection());
         Direction endFacing = resolveEndFacing(level, startPos, selectedPos, player.getDirection());
         BlockState placeState = getBlock().defaultBlockState();
-        if (placeState.hasProperty(SplineExperimentConveyorBlock.FACING)) {
-            placeState = placeState.setValue(SplineExperimentConveyorBlock.FACING, startFacing);
+        if (placeState.hasProperty(ConveyorBlock.FACING)) {
+            placeState = placeState.setValue(ConveyorBlock.FACING, startFacing);
         }
 
         if (!level.setBlock(startPos, placeState, Block.UPDATE_ALL)) {
@@ -97,7 +97,7 @@ public class SplineExperimentConveyorItem extends BlockItem {
         }
 
         BlockEntity blockEntity = level.getBlockEntity(startPos);
-        if (blockEntity instanceof SplineExperimentConveyorBlockEntity splineBlockEntity) {
+        if (blockEntity instanceof ConveyorBlockEntity splineBlockEntity) {
             splineBlockEntity.setEndData(selectedPos, endFacing);
         }
 
@@ -247,7 +247,7 @@ public class SplineExperimentConveyorItem extends BlockItem {
 
     private static boolean isConnectionCandidate(Level level, BlockPos neighborPos) {
         BlockState state = level.getBlockState(neighborPos);
-        if (state.getBlock() instanceof ConveyorConnectable || state.getBlock() instanceof SplineExperimentConveyorBlock) {
+        if (state.getBlock() instanceof ConveyorConnectable || state.getBlock() instanceof ConveyorBlock) {
             return true;
         }
 

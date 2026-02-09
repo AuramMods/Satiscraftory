@@ -1,7 +1,7 @@
 package art.arcane.satiscraftory.block;
 
 import art.arcane.satiscraftory.Satiscraftory;
-import art.arcane.satiscraftory.block.entity.SplineExperimentConveyorBlockEntity;
+import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
@@ -22,11 +22,11 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public class SplineExperimentConveyorBlock extends BaseEntityBlock {
+public class ConveyorBlock extends BaseEntityBlock {
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     private static final VoxelShape SHAPE = Block.box(0.0D, 0.0D, 0.0D, 16.0D, 2.0D, 16.0D);
 
-    public SplineExperimentConveyorBlock(BlockBehaviour.Properties properties) {
+    public ConveyorBlock(BlockBehaviour.Properties properties) {
         super(properties);
         this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
     }
@@ -58,22 +58,22 @@ public class SplineExperimentConveyorBlock extends BaseEntityBlock {
 
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return new SplineExperimentConveyorBlockEntity(pos, state);
+        return new ConveyorBlockEntity(pos, state);
     }
 
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> blockEntityType) {
         if (level.isClientSide) {
-            return createTickerHelper(blockEntityType, Satiscraftory.SPLINE_EXPERIMENT_CONVEYOR_BLOCK_ENTITY.get(), SplineExperimentConveyorBlockEntity::clientTick);
+            return createTickerHelper(blockEntityType, Satiscraftory.CONVEYOR_BLOCK_ENTITY.get(), ConveyorBlockEntity::clientTick);
         }
-        return createTickerHelper(blockEntityType, Satiscraftory.SPLINE_EXPERIMENT_CONVEYOR_BLOCK_ENTITY.get(), SplineExperimentConveyorBlockEntity::serverTick);
+        return createTickerHelper(blockEntityType, Satiscraftory.CONVEYOR_BLOCK_ENTITY.get(), ConveyorBlockEntity::serverTick);
     }
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock())) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
-            if (blockEntity instanceof SplineExperimentConveyorBlockEntity splineEntity) {
+            if (blockEntity instanceof ConveyorBlockEntity splineEntity) {
                 splineEntity.dropContents(level, pos);
             }
             super.onRemove(state, level, pos, newState, isMoving);

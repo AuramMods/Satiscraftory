@@ -1,7 +1,7 @@
 package art.arcane.satiscraftory.client;
 
 import art.arcane.satiscraftory.Satiscraftory;
-import art.arcane.satiscraftory.item.SplineExperimentConveyorItem;
+import art.arcane.satiscraftory.item.ConveyorItem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
@@ -23,13 +23,13 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 @Mod.EventBusSubscriber(modid = Satiscraftory.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
-public final class SplineExperimentPlacementPreview {
+public final class ConveyorPlacementPreview {
     private static final int CURVE_SEGMENTS = 40;
     private static final float RAIL_OFFSET = 0.16F;
     private static final double BELT_Y_OFFSET = 0.11D;
     private static final double EDGE_OFFSET = 0.5D;
 
-    private SplineExperimentPlacementPreview() {
+    private ConveyorPlacementPreview() {
     }
 
     @SubscribeEvent
@@ -45,7 +45,7 @@ public final class SplineExperimentPlacementPreview {
             return;
         }
 
-        BlockPos startPos = SplineExperimentConveyorItem.getStoredStartPos(player, level);
+        BlockPos startPos = ConveyorItem.getStoredStartPos(player, level);
         if (startPos == null) {
             return;
         }
@@ -55,9 +55,9 @@ public final class SplineExperimentPlacementPreview {
             return;
         }
 
-        BlockPos previewEndPos = SplineExperimentConveyorItem.resolvePreviewEndPos(level, blockHit.getBlockPos(), blockHit.getDirection());
-        Direction startFacing = SplineExperimentConveyorItem.resolveStartFacing(level, startPos, previewEndPos, player.getDirection());
-        Direction endFacing = SplineExperimentConveyorItem.resolveEndFacing(level, startPos, previewEndPos, player.getDirection());
+        BlockPos previewEndPos = ConveyorItem.resolvePreviewEndPos(level, blockHit.getBlockPos(), blockHit.getDirection());
+        Direction startFacing = ConveyorItem.resolveStartFacing(level, startPos, previewEndPos, player.getDirection());
+        Direction endFacing = ConveyorItem.resolveEndFacing(level, startPos, previewEndPos, player.getDirection());
 
         Vec3 start = anchorToEdge(new Vec3(startPos.getX() + 0.5D, startPos.getY() + BELT_Y_OFFSET, startPos.getZ() + 0.5D), startFacing.getOpposite());
         Vec3 end = anchorToEdge(new Vec3(previewEndPos.getX() + 0.5D, previewEndPos.getY() + BELT_Y_OFFSET, previewEndPos.getZ() + 0.5D), endFacing);
@@ -105,8 +105,8 @@ public final class SplineExperimentPlacementPreview {
     }
 
     private static boolean holdingSplineItem(LocalPlayer player) {
-        return player.getMainHandItem().getItem() instanceof SplineExperimentConveyorItem
-                || player.getOffhandItem().getItem() instanceof SplineExperimentConveyorItem;
+        return player.getMainHandItem().getItem() instanceof ConveyorItem
+                || player.getOffhandItem().getItem() instanceof ConveyorItem;
     }
 
     private static Vec3 sampleBezier(Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, double t) {

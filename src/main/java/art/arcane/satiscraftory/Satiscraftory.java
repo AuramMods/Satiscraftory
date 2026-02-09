@@ -1,14 +1,13 @@
 package art.arcane.satiscraftory;
 
 import art.arcane.satiscraftory.block.ConveyorStraightBlock;
-import art.arcane.satiscraftory.block.SplineExperimentConveyorBlock;
+import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorStraightBlockEntity;
-import art.arcane.satiscraftory.block.entity.SplineExperimentConveyorBlockEntity;
-import art.arcane.satiscraftory.item.SplineExperimentConveyorItem;
+import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
+import art.arcane.satiscraftory.item.ConveyorItem;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -30,33 +29,16 @@ public class Satiscraftory {
     public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, MODID);
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, MODID);
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
-
-    public static final RegistryObject<Block> CONVEYOR = BLOCKS.register("conveyor", () ->
-            new ConveyorStraightBlock(
-                    BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noOcclusion(),
-                    5L
-            ));
-    public static final RegistryObject<Item> CONVEYOR_ITEM = ITEMS.register("conveyor", () ->
-            new BlockItem(CONVEYOR.get(), new Item.Properties()));
-    public static final RegistryObject<BlockEntityType<ConveyorStraightBlockEntity>> CONVEYOR_BLOCK_ENTITY =
-            BLOCK_ENTITIES.register("conveyor", () ->
-                    BlockEntityType.Builder.of(ConveyorStraightBlockEntity::new, CONVEYOR.get()).build(null));
-    public static final RegistryObject<Block> SPLINE_EXPERIMENT_CONVEYOR = BLOCKS.register("spline_experiment_conveyor", () ->
-            new SplineExperimentConveyorBlock(
-                    BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noOcclusion()
-            ));
-    public static final RegistryObject<Item> SPLINE_EXPERIMENT_CONVEYOR_ITEM = ITEMS.register("spline_experiment_conveyor", () ->
-            new SplineExperimentConveyorItem(SPLINE_EXPERIMENT_CONVEYOR.get(), new Item.Properties()));
-    public static final RegistryObject<BlockEntityType<SplineExperimentConveyorBlockEntity>> SPLINE_EXPERIMENT_CONVEYOR_BLOCK_ENTITY =
-            BLOCK_ENTITIES.register("spline_experiment_conveyor", () ->
-                    BlockEntityType.Builder.of(SplineExperimentConveyorBlockEntity::new, SPLINE_EXPERIMENT_CONVEYOR.get()).build(null));
+    
+    public static final RegistryObject<Block> CONVEYOR = BLOCKS.register("conveyor", () -> new ConveyorBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noOcclusion()));
+    public static final RegistryObject<Item> CONVEYOR_ITEM = ITEMS.register("conveyor", () -> new ConveyorItem(CONVEYOR.get(), new Item.Properties()));
+    public static final RegistryObject<BlockEntityType<ConveyorBlockEntity>> CONVEYOR_BLOCK_ENTITY = BLOCK_ENTITIES.register("conveyor", () -> BlockEntityType.Builder.of(ConveyorBlockEntity::new, CONVEYOR.get()).build(null));
 
     public static final RegistryObject<CreativeModeTab> TAB = CREATIVE_TABS.register(MODID+"_tab", () -> CreativeModeTab.builder()
             .title(Component.literal("Satiscraftory"))
             .icon(() -> new ItemStack(CONVEYOR_ITEM.get()))
             .displayItems((params, output) -> {
                 output.accept(CONVEYOR_ITEM.get());
-                output.accept(SPLINE_EXPERIMENT_CONVEYOR_ITEM.get());
             })
             .build());
 

@@ -1,7 +1,7 @@
 package art.arcane.satiscraftory.client.render;
 
-import art.arcane.satiscraftory.block.SplineExperimentConveyorBlock;
-import art.arcane.satiscraftory.block.entity.SplineExperimentConveyorBlockEntity;
+import art.arcane.satiscraftory.block.ConveyorBlock;
+import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -40,7 +40,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-public class SplineExperimentConveyorRenderer implements BlockEntityRenderer<SplineExperimentConveyorBlockEntity> {
+public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity> {
     private enum AlongAxis {
         U,
         V
@@ -105,11 +105,11 @@ public class SplineExperimentConveyorRenderer implements BlockEntityRenderer<Spl
     private static ResourceManager cachedResourceManager;
     private static boolean templateLoadFailed;
 
-    public SplineExperimentConveyorRenderer(BlockEntityRendererProvider.Context context) {
+    public ConveyorRenderer(BlockEntityRendererProvider.Context context) {
     }
 
     @Override
-    public void render(SplineExperimentConveyorBlockEntity blockEntity,
+    public void render(ConveyorBlockEntity blockEntity,
                        float partialTick,
                        PoseStack poseStack,
                        MultiBufferSource bufferSource,
@@ -187,7 +187,7 @@ public class SplineExperimentConveyorRenderer implements BlockEntityRenderer<Spl
     }
 
     @Override
-    public boolean shouldRenderOffScreen(SplineExperimentConveyorBlockEntity blockEntity) {
+    public boolean shouldRenderOffScreen(ConveyorBlockEntity blockEntity) {
         return true;
     }
 
@@ -772,8 +772,8 @@ public class SplineExperimentConveyorRenderer implements BlockEntityRenderer<Spl
     }
 
     private static Direction getFacing(BlockState state) {
-        if (state.hasProperty(SplineExperimentConveyorBlock.FACING)) {
-            return state.getValue(SplineExperimentConveyorBlock.FACING);
+        if (state.hasProperty(ConveyorBlock.FACING)) {
+            return state.getValue(ConveyorBlock.FACING);
         }
         return Direction.NORTH;
     }
