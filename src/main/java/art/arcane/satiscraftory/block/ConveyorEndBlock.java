@@ -1,11 +1,9 @@
 package art.arcane.satiscraftory.block;
 
 import art.arcane.satiscraftory.Satiscraftory;
-import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
-import art.arcane.satiscraftory.data.ConveyorTier;
+import art.arcane.satiscraftory.block.entity.ConveyorEndBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
@@ -24,29 +22,13 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public class ConveyorBlock extends BaseEntityBlock {
+public class ConveyorEndBlock extends BaseEntityBlock {
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     private static final VoxelShape SHAPE = Block.box(0.0D, 0.0D, 0.0D, 16.0D, 2.0D, 16.0D);
-    private final ConveyorTier tier;
-    private final ResourceLocation sourceModelJson;
 
-    public ConveyorBlock(BlockBehaviour.Properties properties, ConveyorTier tier, ResourceLocation sourceModelJson) {
+    public ConveyorEndBlock(BlockBehaviour.Properties properties) {
         super(properties);
-        this.tier = tier;
-        this.sourceModelJson = sourceModelJson;
-        this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
-    }
-
-    public ConveyorTier getTier() {
-        return tier;
-    }
-
-    public int getTravelTicksPerBlock() {
-        return tier.getTravelTicksPerBlock();
-    }
-
-    public ResourceLocation getSourceModelJson() {
-        return sourceModelJson;
+        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
     }
 
     @Override
@@ -76,26 +58,22 @@ public class ConveyorBlock extends BaseEntityBlock {
 
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return new ConveyorBlockEntity(pos, state);
+        return new ConveyorEndBlockEntity(pos, state);
     }
 
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> blockEntityType) {
-        if (level.isClientSide) {
-            return createTickerHelper(blockEntityType, Satiscraftory.CONVEYOR_BLOCK_ENTITY.get(), ConveyorBlockEntity::clientTick);
-        }
-        return createTickerHelper(blockEntityType, Satiscraftory.CONVEYOR_BLOCK_ENTITY.get(), ConveyorBlockEntity::serverTick);
+        return createTickerHelper(blockEntityType, Satiscraftory.CONVEYOR_END_BLOCK_ENTITY.get(), ConveyorEndBlockEntity::tick);
     }
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock())) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
-            if (blockEntity instanceof ConveyorBlockEntity splineEntity) {
-                splineEntity.removeLinkedEndMarker();
-                splineEntity.dropContents(level, pos);
+            if (blockEntity instanceof ConveyorEndBlockEntity endBlockEntity) {
+                endBlockEntity.onEndBlockRemoved(level, pos);
             }
-            super.onRemove(state, level, pos, newState, isMoving);
         }
+        super.onRemove(state, level, pos, newState, isMoving);
     }
 }

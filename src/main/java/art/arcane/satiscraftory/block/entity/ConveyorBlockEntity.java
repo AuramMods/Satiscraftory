@@ -2,6 +2,7 @@ package art.arcane.satiscraftory.block.entity;
 
 import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.block.ConveyorBlock;
+import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -17,6 +18,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -83,6 +85,7 @@ public class ConveyorBlockEntity extends BlockEntity {
     private double stepAccumulator;
     private long syncRevision;
     private boolean needsSync;
+    private transient long nextEndMarkerValidationTick = Long.MIN_VALUE;
 
     private transient long lastClientAppliedRevision = Long.MIN_VALUE;
     private transient long clientSnapshotGameTime = Long.MIN_VALUE;
@@ -124,11 +127,23 @@ public class ConveyorBlockEntity extends BlockEntity {
     }
 
     public void setEndData(BlockPos endPos, Direction endFacing) {
+        BlockPos previousEndPos = this.endPos;
         this.endPos = endPos.immutable();
         this.endFacing = endFacing.getAxis().isHorizontal() ? endFacing : Direction.NORTH;
         recalculateLengthAndResize(false);
+        nextEndMarkerValidationTick = Long.MIN_VALUE;
+        if (level != null && !level.isClientSide) {
+            updateLinkedEndMarker(previousEndPos);
+        }
         setChanged();
         syncToClient();
+    }
+
+    public void removeLinkedEndMarker() {
+        if (level == null || level.isClientSide || endPos == null) {
+            return;
+        }
+        removeLinkedEndMarkerAt(endPos);
     }
 
     @Override
@@ -231,6 +246,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         lastAccumulatorTick = Long.MIN_VALUE;
         lastSyncPacketGameTime = Long.MIN_VALUE;
         needsSync = false;
+        nextEndMarkerValidationTick = Long.MIN_VALUE;
 
         normalizeInventory(false);
         recalculateLengthAndResize(false);
@@ -327,6 +343,8 @@ public class ConveyorBlockEntity extends BlockEntity {
         if (!(state.getBlock() instanceof ConveyorBlock)) {
             return;
         }
+
+        validateLinkedEndMarker(level.getGameTime());
 
         if (recalculateLengthAndResize(true)) {
             normalizeInventory(true);
@@ -1172,6 +1190,80 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
 
         return endPos.relative(getOutputSide());
+    }
+
+    private void validateLinkedEndMarker(long gameTime) {
+        if (level == null || level.isClientSide || endPos == null) {
+            return;
+        }
+        if (nextEndMarkerValidationTick != Long.MIN_VALUE && gameTime < nextEndMarkerValidationTick) {
+            return;
+        }
+        nextEndMarkerValidationTick = gameTime + 20L;
+        ensureLinkedEndMarker();
+    }
+
+    private void updateLinkedEndMarker(@Nullable BlockPos previousEndPos) {
+        if (level == null || level.isClientSide) {
+            return;
+        }
+        if (previousEndPos != null && !previousEndPos.equals(endPos)) {
+            removeLinkedEndMarkerAt(previousEndPos);
+        }
+        ensureLinkedEndMarker();
+    }
+
+    private void ensureLinkedEndMarker() {
+        if (level == null || level.isClientSide || endPos == null || !level.isLoaded(endPos)) {
+            return;
+        }
+
+        Direction outputSide = getOutputSide();
+        BlockState desiredState = Satiscraftory.CONVEYOR_END.get().defaultBlockState();
+        if (desiredState.hasProperty(ConveyorEndBlock.FACING)) {
+            desiredState = desiredState.setValue(ConveyorEndBlock.FACING, outputSide);
+        }
+
+        BlockState existingState = level.getBlockState(endPos);
+        if (!existingState.is(Satiscraftory.CONVEYOR_END.get())) {
+            if (!existingState.canBeReplaced()) {
+                return;
+            }
+            if (!level.setBlock(endPos, desiredState, Block.UPDATE_ALL)) {
+                return;
+            }
+        } else if (existingState.hasProperty(ConveyorEndBlock.FACING)
+                && existingState.getValue(ConveyorEndBlock.FACING) != outputSide) {
+            level.setBlock(endPos, existingState.setValue(ConveyorEndBlock.FACING, outputSide), Block.UPDATE_ALL);
+        }
+
+        BlockEntity endBlockEntity = level.getBlockEntity(endPos);
+        if (endBlockEntity instanceof ConveyorEndBlockEntity conveyorEndBlockEntity) {
+            conveyorEndBlockEntity.setMasterPos(worldPosition);
+        }
+    }
+
+    private void removeLinkedEndMarkerAt(BlockPos markerPos) {
+        if (level == null || level.isClientSide || !level.isLoaded(markerPos)) {
+            return;
+        }
+
+        BlockState markerState = level.getBlockState(markerPos);
+        if (!markerState.is(Satiscraftory.CONVEYOR_END.get())) {
+            return;
+        }
+
+        BlockEntity markerBlockEntity = level.getBlockEntity(markerPos);
+        if (markerBlockEntity instanceof ConveyorEndBlockEntity conveyorEndBlockEntity) {
+            BlockPos linkedMaster = conveyorEndBlockEntity.getMasterPos();
+            if (linkedMaster != null && !worldPosition.equals(linkedMaster)) {
+                return;
+            }
+            conveyorEndBlockEntity.suppressLinkedBreakOnce();
+            conveyorEndBlockEntity.setMasterPos(null);
+        }
+
+        level.removeBlock(markerPos, false);
     }
 
     private void markDirtyForSync() {

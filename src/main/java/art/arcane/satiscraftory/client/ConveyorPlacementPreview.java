@@ -58,6 +58,8 @@ public final class ConveyorPlacementPreview {
         BlockPos previewEndPos = ConveyorItem.resolvePreviewEndPos(level, blockHit.getBlockPos(), blockHit.getDirection());
         Direction startFacing = ConveyorItem.resolveStartFacing(level, startPos, previewEndPos, player.getDirection());
         Direction endFacing = ConveyorItem.resolveEndFacing(level, startPos, previewEndPos, player.getDirection());
+        int estimatedLength = ConveyorItem.estimateSplineLengthBlocks(startPos, startFacing, previewEndPos, endFacing);
+        boolean overMaxLength = estimatedLength > ConveyorItem.MAX_SPLINE_LENGTH_BLOCKS;
 
         Vec3 start = anchorToEdge(new Vec3(startPos.getX() + 0.5D, startPos.getY() + BELT_Y_OFFSET, startPos.getZ() + 0.5D), startFacing.getOpposite());
         Vec3 end = anchorToEdge(new Vec3(previewEndPos.getX() + 0.5D, previewEndPos.getY() + BELT_Y_OFFSET, previewEndPos.getZ() + 0.5D), endFacing);
@@ -94,9 +96,15 @@ public final class ConveyorPlacementPreview {
             }
             Vec3 perpendicular = new Vec3(-horizontal.z, 0.0D, horizontal.x).scale(RAIL_OFFSET);
 
-            drawLine(lineBuffer, pose, normal, previous, current, 45, 240, 255, 255);
-            drawLine(lineBuffer, pose, normal, previous.add(perpendicular), current.add(perpendicular), 20, 170, 185, 210);
-            drawLine(lineBuffer, pose, normal, previous.subtract(perpendicular), current.subtract(perpendicular), 20, 170, 185, 210);
+            if (overMaxLength) {
+                drawLine(lineBuffer, pose, normal, previous, current, 255, 64, 64, 255);
+                drawLine(lineBuffer, pose, normal, previous.add(perpendicular), current.add(perpendicular), 220, 40, 40, 220);
+                drawLine(lineBuffer, pose, normal, previous.subtract(perpendicular), current.subtract(perpendicular), 220, 40, 40, 220);
+            } else {
+                drawLine(lineBuffer, pose, normal, previous, current, 45, 240, 255, 255);
+                drawLine(lineBuffer, pose, normal, previous.add(perpendicular), current.add(perpendicular), 20, 170, 185, 210);
+                drawLine(lineBuffer, pose, normal, previous.subtract(perpendicular), current.subtract(perpendicular), 20, 170, 185, 210);
+            }
             previous = current;
         }
 

@@ -1,7 +1,9 @@
 package art.arcane.satiscraftory;
 
 import art.arcane.satiscraftory.block.ConveyorBlock;
+import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
+import art.arcane.satiscraftory.block.entity.ConveyorEndBlockEntity;
 import art.arcane.satiscraftory.data.ConveyorTier;
 import art.arcane.satiscraftory.item.ConveyorItem;
 import com.mojang.logging.LogUtils;
@@ -36,6 +38,10 @@ public class Satiscraftory {
     public static final RegistryObject<Block> CONVEYOR_4 = registerConveyorBlock("conveyor_4", ConveyorTier.MARK_4);
     public static final RegistryObject<Block> CONVEYOR_5 = registerConveyorBlock("conveyor_5", ConveyorTier.MARK_5);
     public static final RegistryObject<Block> CONVEYOR_6 = registerConveyorBlock("conveyor_6", ConveyorTier.MARK_6);
+    public static final RegistryObject<Block> CONVEYOR_END = BLOCKS.register(
+            "conveyor_end",
+            () -> new ConveyorEndBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noOcclusion())
+    );
 
     public static final RegistryObject<Item> CONVEYOR_1_ITEM = registerConveyorItem("conveyor_1", CONVEYOR_1);
     public static final RegistryObject<Item> CONVEYOR_2_ITEM = registerConveyorItem("conveyor_2", CONVEYOR_2);
@@ -55,6 +61,10 @@ public class Satiscraftory {
                     CONVEYOR_5.get(),
                     CONVEYOR_6.get()
             ).build(null)
+    );
+    public static final RegistryObject<BlockEntityType<ConveyorEndBlockEntity>> CONVEYOR_END_BLOCK_ENTITY = BLOCK_ENTITIES.register(
+            "conveyor_end",
+            () -> BlockEntityType.Builder.of(ConveyorEndBlockEntity::new, CONVEYOR_END.get()).build(null)
     );
 
     public static final RegistryObject<CreativeModeTab> TAB = CREATIVE_TABS.register(MODID+"_tab", () -> CreativeModeTab.builder()
