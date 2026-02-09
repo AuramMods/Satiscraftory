@@ -413,6 +413,15 @@ public class SplineExperimentConveyorRenderer implements BlockEntityRenderer<Spl
         if (face.repeatEnabled()) {
             float rawRepeated = face.repeatStart() + ((float) distanceAlongSpline * face.repeatPixelsPerBlock());
             float repeated = wrapToRange(rawRepeated, face.repeatMin(), face.repeatWrapRange());
+
+            // Preserve continuity at the exact start edge for negative UV flow.
+            // Without this, t=0 can fold from max->min and create a tiny flipped sliver.
+            if (face.repeatPixelsPerBlock() < 0.0F
+                    && Math.abs(local.z() - face.z1()) < EPSILON
+                    && Math.abs(repeated - face.repeatMin()) < 1.0E-5F) {
+                repeated = face.repeatMin() + face.repeatWrapRange();
+            }
+
             if (face.repeatAxis() == AlongAxis.U) {
                 u = repeated;
             } else {
