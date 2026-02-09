@@ -1,4 +1,5 @@
 {
   "itemGroup.satiscraftory_tab": "Satiscraftory",
-  "block.satiscraftory.conveyor": "Conveyor"
+  "block.satiscraftory.conveyor": "Conveyor",
+  "block.satiscraftory.spline_experiment_conveyor": "Spline Conveyor (Experiment)"
 }
