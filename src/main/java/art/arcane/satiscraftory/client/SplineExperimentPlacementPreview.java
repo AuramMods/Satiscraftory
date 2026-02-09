@@ -59,7 +59,7 @@ public final class SplineExperimentPlacementPreview {
         Direction startFacing = SplineExperimentConveyorItem.resolveStartFacing(level, startPos, previewEndPos, player.getDirection());
         Direction endFacing = SplineExperimentConveyorItem.resolveEndFacing(level, startPos, previewEndPos, player.getDirection());
 
-        Vec3 start = anchorToEdge(new Vec3(startPos.getX() + 0.5D, startPos.getY() + BELT_Y_OFFSET, startPos.getZ() + 0.5D), startFacing);
+        Vec3 start = anchorToEdge(new Vec3(startPos.getX() + 0.5D, startPos.getY() + BELT_Y_OFFSET, startPos.getZ() + 0.5D), startFacing.getOpposite());
         Vec3 end = anchorToEdge(new Vec3(previewEndPos.getX() + 0.5D, previewEndPos.getY() + BELT_Y_OFFSET, previewEndPos.getZ() + 0.5D), endFacing);
 
         Vec3 flatDelta = new Vec3(end.x - start.x, 0.0D, end.z - start.z);
