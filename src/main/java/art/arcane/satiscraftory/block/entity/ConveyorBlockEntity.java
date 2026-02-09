@@ -41,7 +41,7 @@ import java.util.Set;
 
 public class ConveyorBlockEntity extends BlockEntity {
     private static final int SLOTS_PER_BLOCK = 3;
-    private static final int BASE_TRAVEL_TICKS_PER_BLOCK = 60;
+    private static final int DEFAULT_TRAVEL_TICKS_PER_BLOCK = 60;
     private static final int LENGTH_SAMPLE_SEGMENTS = 80;
     private static final int MAX_CLIENT_PREDICTION_STEPS = 256;
     private static final double VISUAL_RANGE_BLOCKS = 16.0D;
@@ -56,6 +56,7 @@ public class ConveyorBlockEntity extends BlockEntity {
     private static final String RENDER_POSITIONS_TAG = "render_positions";
     private static final String ITEM_IDS_TAG = "item_ids";
     private static final String STEP_ACCUMULATOR_TAG = "step_accumulator";
+    private static final String TRAVEL_TICKS_PER_BLOCK_TAG = "travel_ticks_per_block";
     private static final String SYNC_REVISION_TAG = "sync_revision";
 
     private static long NEXT_ITEM_ID = 1L;
@@ -65,6 +66,7 @@ public class ConveyorBlockEntity extends BlockEntity {
     private Direction endFacing = Direction.NORTH;
     private int beltLengthBlocks = 1;
     private int bufferSlots = SLOTS_PER_BLOCK;
+    private int travelTicksPerBlock = DEFAULT_TRAVEL_TICKS_PER_BLOCK;
 
     private ItemStackHandler inventory;
     private int[] renderPositions;
@@ -96,6 +98,7 @@ public class ConveyorBlockEntity extends BlockEntity {
 
     public ConveyorBlockEntity(BlockPos pos, BlockState blockState) {
         super(Satiscraftory.CONVEYOR_BLOCK_ENTITY.get(), pos, blockState);
+        travelTicksPerBlock = resolveTravelTicksPerBlock(blockState);
         inventory = createInventory(bufferSlots);
         renderPositions = new int[bufferSlots];
         Arrays.fill(renderPositions, -1);
@@ -114,6 +117,10 @@ public class ConveyorBlockEntity extends BlockEntity {
 
     public int getBeltLengthBlocks() {
         return beltLengthBlocks;
+    }
+
+    public int getTravelTicksPerBlock() {
+        return travelTicksPerBlock;
     }
 
     public void setEndData(BlockPos endPos, Direction endFacing) {
@@ -159,6 +166,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         tag.putIntArray(RENDER_POSITIONS_TAG, renderPositions);
         tag.putLongArray(ITEM_IDS_TAG, itemIds);
         tag.putDouble(STEP_ACCUMULATOR_TAG, stepAccumulator);
+        tag.putInt(TRAVEL_TICKS_PER_BLOCK_TAG, travelTicksPerBlock);
         tag.putLong(SYNC_REVISION_TAG, syncRevision);
     }
 
@@ -216,6 +224,9 @@ public class ConveyorBlockEntity extends BlockEntity {
         stepAccumulator = tag.contains(STEP_ACCUMULATOR_TAG, Tag.TAG_DOUBLE)
                 ? clamp(tag.getDouble(STEP_ACCUMULATOR_TAG), 0.0D, 512.0D)
                 : 0.0D;
+        travelTicksPerBlock = tag.contains(TRAVEL_TICKS_PER_BLOCK_TAG, Tag.TAG_INT)
+                ? Math.max(1, tag.getInt(TRAVEL_TICKS_PER_BLOCK_TAG))
+                : resolveTravelTicksPerBlock(getBlockState());
         syncRevision = Math.max(0L, incomingRevision);
         lastAccumulatorTick = Long.MIN_VALUE;
         lastSyncPacketGameTime = Long.MIN_VALUE;
@@ -1128,11 +1139,11 @@ public class ConveyorBlockEntity extends BlockEntity {
     }
 
     private long getConfiguredTravelTicks() {
-        return Math.max(1L, beltLengthBlocks * (long) BASE_TRAVEL_TICKS_PER_BLOCK);
+        return Math.max(1L, beltLengthBlocks * (long) travelTicksPerBlock);
     }
 
     private long getClientSyncIntervalTicks() {
-        return Math.max(1L, BASE_TRAVEL_TICKS_PER_BLOCK/2L);
+        return Math.max(1L, travelTicksPerBlock / 2L);
     }
 
     private Direction getInputSide() {
@@ -1529,6 +1540,13 @@ public class ConveyorBlockEntity extends BlockEntity {
             return state.getValue(ConveyorBlock.FACING);
         }
         return Direction.NORTH;
+    }
+
+    private static int resolveTravelTicksPerBlock(BlockState state) {
+        if (state.getBlock() instanceof ConveyorBlock conveyorBlock) {
+            return Math.max(1, conveyorBlock.getTravelTicksPerBlock());
+        }
+        return DEFAULT_TRAVEL_TICKS_PER_BLOCK;
     }
 
     private void rebuildCapabilities() {

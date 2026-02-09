@@ -1,18 +1,18 @@
 {
   "variants": {
     "facing=north": {
-      "model": "satiscraftory:block/conveyor_1"
+      "model": "satiscraftory:block/conveyor_5"
     },
     "facing=east": {
-      "model": "satiscraftory:block/conveyor_1",
+      "model": "satiscraftory:block/conveyor_5",
       "y": 90
     },
     "facing=south": {
-      "model": "satiscraftory:block/conveyor_1",
+      "model": "satiscraftory:block/conveyor_5",
       "y": 180
     },
     "facing=west": {
-      "model": "satiscraftory:block/conveyor_1",
+      "model": "satiscraftory:block/conveyor_5",
       "y": 270
     }
   }

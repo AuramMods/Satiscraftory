@@ -94,16 +94,14 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
     private static final float WRAP_SEAM_RAW_EPSILON_SCALE = 0.0001F;
     private static final int MAX_WRAP_SPLITS_PER_STRIP = 16;
 
-    // Input model for the generic spline renderer.
-    private static final ResourceLocation SOURCE_MODEL_JSON = ResourceLocation.fromNamespaceAndPath(
-            "satiscraftory", "models/block/conveyor_straight.json"
+    private static final ResourceLocation DEFAULT_SOURCE_MODEL_JSON = ResourceLocation.fromNamespaceAndPath(
+            "satiscraftory", "models/block/conveyor_1.json"
     );
 
-    @Nullable
-    private static SplineModelTemplate cachedTemplate;
+    private static final Map<ResourceLocation, SplineModelTemplate> cachedTemplates = new HashMap<>();
+    private static final Set<ResourceLocation> failedTemplates = new HashSet<>();
     @Nullable
     private static ResourceManager cachedResourceManager;
-    private static boolean templateLoadFailed;
 
     public ConveyorRenderer(BlockEntityRendererProvider.Context context) {
     }
@@ -115,7 +113,8 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                        MultiBufferSource bufferSource,
                        int packedLight,
                        int packedOverlay) {
-        SplineModelTemplate template = getOrLoadTemplate();
+        ResourceLocation sourceModelJson = getSourceModelForState(blockEntity.getBlockState());
+        SplineModelTemplate template = getOrLoadTemplate(sourceModelJson);
         if (template == null || template.faces().isEmpty()) {
             return;
         }
@@ -778,37 +777,50 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
         return Direction.NORTH;
     }
 
+    private static ResourceLocation getSourceModelForState(BlockState state) {
+        if (state.getBlock() instanceof ConveyorBlock conveyorBlock) {
+            return conveyorBlock.getSourceModelJson();
+        }
+        return DEFAULT_SOURCE_MODEL_JSON;
+    }
+
     @Nullable
-    private static SplineModelTemplate getOrLoadTemplate() {
+    private static SplineModelTemplate getOrLoadTemplate(ResourceLocation sourceModelJson) {
         Minecraft minecraft = Minecraft.getInstance();
         ResourceManager resourceManager = minecraft.getResourceManager();
 
         if (resourceManager != cachedResourceManager) {
             cachedResourceManager = resourceManager;
-            cachedTemplate = null;
-            templateLoadFailed = false;
+            cachedTemplates.clear();
+            failedTemplates.clear();
         }
 
+        if (failedTemplates.contains(sourceModelJson)) {
+            return null;
+        }
+
+        SplineModelTemplate cachedTemplate = cachedTemplates.get(sourceModelJson);
         if (cachedTemplate != null) {
             return cachedTemplate;
         }
 
-        if (templateLoadFailed) {
+        SplineModelTemplate loaded = loadTemplate(minecraft, resourceManager, sourceModelJson);
+        if (loaded == null) {
+            failedTemplates.add(sourceModelJson);
             return null;
         }
 
-        cachedTemplate = loadTemplate(minecraft, resourceManager);
-        if (cachedTemplate == null) {
-            templateLoadFailed = true;
-        }
-        return cachedTemplate;
+        cachedTemplates.put(sourceModelJson, loaded);
+        return loaded;
     }
 
     @Nullable
-    private static SplineModelTemplate loadTemplate(Minecraft minecraft, ResourceManager resourceManager) {
-        Optional<Resource> modelResource = resourceManager.getResource(SOURCE_MODEL_JSON);
+    private static SplineModelTemplate loadTemplate(Minecraft minecraft,
+                                                    ResourceManager resourceManager,
+                                                    ResourceLocation sourceModelJson) {
+        Optional<Resource> modelResource = resourceManager.getResource(sourceModelJson);
         if (modelResource.isEmpty()) {
-            LOGGER.warn("Spline source model not found: {}", SOURCE_MODEL_JSON);
+            LOGGER.warn("Spline source model not found: {}", sourceModelJson);
             return null;
         }
 
@@ -833,7 +845,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                     ? root.getAsJsonArray("elements")
                     : null;
             if (elements == null || elements.isEmpty()) {
-                LOGGER.warn("Spline source model has no elements: {}", SOURCE_MODEL_JSON);
+                LOGGER.warn("Spline source model has no elements: {}", sourceModelJson);
                 return null;
             }
 
@@ -875,7 +887,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                     }
 
                     String textureRef = faceJson.get("texture").getAsString();
-                    ResourceLocation textureLocation = resolveTexture(textures, textureRef, SOURCE_MODEL_JSON.getNamespace());
+                    ResourceLocation textureLocation = resolveTexture(textures, textureRef, sourceModelJson.getNamespace());
                     if (textureLocation == null) {
                         continue;
                     }
@@ -910,7 +922,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
 
             return new SplineModelTemplate(faces);
         } catch (Exception e) {
-            LOGGER.error("Failed to load spline source model {}", SOURCE_MODEL_JSON, e);
+            LOGGER.error("Failed to load spline source model {}", sourceModelJson, e);
             return null;
         }
     }

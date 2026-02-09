@@ -1,5 +1,9 @@
 {
   "itemGroup.satiscraftory_tab": "Satiscraftory",
-  "block.satiscraftory.conveyor": "Conveyor",
-  "block.satiscraftory.spline_experiment_conveyor": "Spline Conveyor (Experiment)"
+  "block.satiscraftory.conveyor_1": "Conveyor Belt Mk.1",
+  "block.satiscraftory.conveyor_2": "Conveyor Belt Mk.2",
+  "block.satiscraftory.conveyor_3": "Conveyor Belt Mk.3",
+  "block.satiscraftory.conveyor_4": "Conveyor Belt Mk.4",
+  "block.satiscraftory.conveyor_5": "Conveyor Belt Mk.5",
+  "block.satiscraftory.conveyor_6": "Conveyor Belt Mk.6"
 }

@@ -13,4 +13,8 @@ public enum ConveyorTier {
     ConveyorTier(int speed) {
         this.speed = speed;
     }
+
+    public int getTravelTicksPerBlock() {
+        return speed;
+    }
 }
