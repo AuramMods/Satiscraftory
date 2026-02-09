@@ -91,6 +91,7 @@ public class SplineExperimentConveyorRenderer implements BlockEntityRenderer<Spl
     private static final int CURVE_SEGMENTS = 96;
     private static final float EDGE_OFFSET = 0.5F;
     private static final float EPSILON = 1.0E-6F;
+    private static final float WRAP_SEAM_RAW_EPSILON_SCALE = 0.0001F;
     private static final int MAX_WRAP_SPLITS_PER_STRIP = 16;
 
     // Input model for the generic spline renderer.
@@ -262,6 +263,7 @@ public class SplineExperimentConveyorRenderer implements BlockEntityRenderer<Spl
         float currentStart = stripStart;
         for (int i = 0; i < MAX_WRAP_SPLITS_PER_STRIP && (stripEnd - currentStart) > EPSILON; i++) {
             float currentEnd = stripEnd;
+            float nextStart = currentEnd;
             float rawStart = repeatRawAt(face, distances, currentStart);
             float rawEnd = repeatRawAt(face, distances, currentEnd);
             float delta = rawEnd - rawStart;
@@ -274,23 +276,43 @@ public class SplineExperimentConveyorRenderer implements BlockEntityRenderer<Spl
                     float boundary = delta > 0.0F
                             ? face.repeatMin() + ((bucketStart + 1) * face.repeatWrapRange())
                             : face.repeatMin() + (bucketStart * face.repeatWrapRange());
-                    float split = findSplitTForRaw(face, distances, currentStart, currentEnd, boundary, delta > 0.0F);
-                    if ((split - currentStart) > EPSILON && (currentEnd - split) > EPSILON) {
-                        currentEnd = split;
+
+                    // Avoid rendering exactly on the wrap boundary where atlas UV modulo
+                    // can produce tiny flipped seam strips.
+                    float rawSeamEpsilon = Math.max(1.0E-6F, face.repeatWrapRange() * WRAP_SEAM_RAW_EPSILON_SCALE);
+                    float beforeBoundaryRaw = boundary + (delta > 0.0F ? -rawSeamEpsilon : rawSeamEpsilon);
+                    float afterBoundaryRaw = boundary + (delta > 0.0F ? rawSeamEpsilon : -rawSeamEpsilon);
+
+                    float splitBefore = findSplitTForRaw(face, distances, currentStart, currentEnd, beforeBoundaryRaw, delta > 0.0F);
+                    float splitAfter = findSplitTForRaw(face, distances, currentStart, currentEnd, afterBoundaryRaw, delta > 0.0F);
+
+                    if ((splitBefore - currentStart) > EPSILON
+                            && (currentEnd - splitAfter) > EPSILON
+                            && (splitAfter - splitBefore) > EPSILON) {
+                        currentEnd = splitBefore;
+                        nextStart = splitAfter;
+                    } else {
+                        float split = findSplitTForRaw(face, distances, currentStart, currentEnd, boundary, delta > 0.0F);
+                        if ((split - currentStart) > EPSILON && (currentEnd - split) > EPSILON) {
+                            currentEnd = split;
+                            nextStart = split;
+                        }
                     }
                 }
             }
 
-            renderStripSegment(
-                    face, stripAxis, currentStart, currentEnd, consumer, pose, normalMatrix,
-                    level, originPos, defaultPackedLight, packedOverlay,
-                    points, perpendiculars, tangents, distances
-            );
+            if ((currentEnd - currentStart) > EPSILON) {
+                renderStripSegment(
+                        face, stripAxis, currentStart, currentEnd, consumer, pose, normalMatrix,
+                        level, originPos, defaultPackedLight, packedOverlay,
+                        points, perpendiculars, tangents, distances
+                );
+            }
 
-            if ((stripEnd - currentEnd) <= EPSILON) {
+            if ((stripEnd - nextStart) <= EPSILON) {
                 break;
             }
-            currentStart = currentEnd;
+            currentStart = nextStart;
         }
     }
 
@@ -408,9 +430,9 @@ public class SplineExperimentConveyorRenderer implements BlockEntityRenderer<Spl
     private static int repeatBucket(float rawValue, float repeatMin, float repeatRange, boolean increasing) {
         float normalized = (rawValue - repeatMin) / repeatRange;
         if (increasing) {
-            normalized = (float) Math.nextAfter(normalized, Double.NEGATIVE_INFINITY);
-        } else {
             normalized = (float) Math.nextAfter(normalized, Double.POSITIVE_INFINITY);
+        } else {
+            normalized = (float) Math.nextAfter(normalized, Double.NEGATIVE_INFINITY);
         }
         return (int) Math.floor(normalized);
     }
