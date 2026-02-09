@@ -3,14 +3,30 @@
 	"credit": "Made with Blockbench",
 	"parent": "minecraft:block/block",
 	"textures": {
+		"lights_emissive": "satiscraftory:block/conveyor_5e",
+		"particle": "satiscraftory:block/conveyor_5",
 		"x": "satiscraftory:block/conveyor_5"
 	},
 	"elements": [
 		{
 			"name": "rail_left",
-			"from": [0, 0, 0],
-			"to": [2, 2, 16],
+			"from": [0.01, 0, 0],
+			"to": [2.01, 3, 16],
 			"rotation": {"angle": 0, "axis": "y", "origin": [0, 0, 14]},
+			"faces": {
+				"north": {"uv": [0, 0, 1, 1], "texture": "#x"},
+				"east": {"uv": [0.5, 1, 2, 9], "rotation": 90, "texture": "#x"},
+				"south": {"uv": [0, 9, 1, 10], "texture": "#x"},
+				"west": {"uv": [0.5, 1, 2, 9], "rotation": 90, "texture": "#x"},
+				"up": {"uv": [0, 1, 1, 9], "texture": "#x"},
+				"down": {"uv": [0, 1, 1, 9], "texture": "#x"}
+			}
+		},
+		{
+			"name": "rail_left_rim",
+			"from": [1.01, 3, 0],
+			"to": [2.01, 5, 16],
+			"rotation": {"angle": 0, "axis": "y", "origin": [0, 3, 14]},
 			"faces": {
 				"north": {"uv": [0, 0, 1, 1], "texture": "#x"},
 				"east": {"uv": [1, 1, 2, 9], "rotation": 90, "texture": "#x"},
@@ -21,10 +37,52 @@
 			}
 		},
 		{
-			"name": "rail_right",
-			"from": [14, 0, 0],
+			"name": "rail_left_e",
+			"from": [0, 0, 0],
+			"to": [0, 2, 16],
+			"rotation": {"angle": 0, "axis": "y", "origin": [-2, 0, 14]},
+			"faces": {
+				"north": {"uv": [0, 0, 1, 1], "texture": "#lights_emissive"},
+				"east": {"uv": [2.5, 1.5, 3.5, 9.5], "rotation": 90, "texture": "#lights_emissive"},
+				"south": {"uv": [0, 9, 1, 10], "texture": "#lights_emissive"},
+				"west": {"uv": [1, 1, 2, 9], "rotation": 90, "texture": "#lights_emissive"},
+				"up": {"uv": [10, 2, 11, 10], "texture": "#lights_emissive"},
+				"down": {"uv": [5, 0.5, 6, 8.5], "texture": "#lights_emissive"}
+			}
+		},
+		{
+			"name": "rail_right_e",
+			"from": [16, 0, 0],
 			"to": [16, 2, 16],
 			"rotation": {"angle": 0, "axis": "y", "origin": [14, 0, 14]},
+			"faces": {
+				"north": {"uv": [0, 0, 1, 1], "texture": "#lights_emissive"},
+				"east": {"uv": [1, 1, 2, 9], "rotation": 90, "texture": "#lights_emissive"},
+				"south": {"uv": [0, 9, 1, 10], "texture": "#lights_emissive"},
+				"west": {"uv": [3, 1.5, 4, 9.5], "rotation": 90, "texture": "#lights_emissive"},
+				"up": {"uv": [10, 2, 11, 10], "texture": "#lights_emissive"},
+				"down": {"uv": [5, 0.5, 6, 8.5], "texture": "#lights_emissive"}
+			}
+		},
+		{
+			"name": "rail_right",
+			"from": [13.99, 0, 0],
+			"to": [15.99, 3, 16],
+			"rotation": {"angle": 0, "axis": "y", "origin": [14, 0, 14]},
+			"faces": {
+				"north": {"uv": [0, 0, 1, 1], "texture": "#x"},
+				"east": {"uv": [0, 1, 1.5, 9], "rotation": 90, "texture": "#x"},
+				"south": {"uv": [0, 9, 1, 10], "texture": "#x"},
+				"west": {"uv": [0, 1, 1.5, 9], "rotation": 90, "texture": "#x"},
+				"up": {"uv": [1, 1, 2, 9], "texture": "#x"},
+				"down": {"uv": [1, 1, 2, 9], "texture": "#x"}
+			}
+		},
+		{
+			"name": "rail_right_rim",
+			"from": [13.99, 3, 0],
+			"to": [14.99, 5, 16],
+			"rotation": {"angle": 0, "axis": "y", "origin": [14, 3, 14]},
 			"faces": {
 				"north": {"uv": [0, 0, 1, 1], "texture": "#x"},
 				"east": {"uv": [0, 1, 1, 9], "rotation": 90, "texture": "#x"},

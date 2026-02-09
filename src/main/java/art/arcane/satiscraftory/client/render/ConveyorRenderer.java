@@ -10,6 +10,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -64,6 +65,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
     private record ModelFace(
             Direction direction,
             TextureAtlasSprite sprite,
+            boolean emissive,
             float x1,
             float x2,
             float y1,
@@ -85,6 +87,9 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
     }
 
     private record SplineModelTemplate(List<ModelFace> faces) {
+    }
+
+    private record TextureReference(ResourceLocation textureLocation, boolean emissive) {
     }
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -381,6 +386,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                 pose,
                 normalMatrix,
                 face.sprite(),
+                face.emissive(),
                 worldA,
                 worldB,
                 worldC,
@@ -478,6 +484,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                                  Matrix4f pose,
                                  Matrix3f normalMatrix,
                                  TextureAtlasSprite sprite,
+                                 boolean emissive,
                                  Vec3 a,
                                  Vec3 b,
                                  Vec3 c,
@@ -501,10 +508,21 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
             }
         }
 
-        int lightA = samplePackedLight(level, originPos, a, defaultPackedLight);
-        int lightB = samplePackedLight(level, originPos, b, defaultPackedLight);
-        int lightC = samplePackedLight(level, originPos, c, defaultPackedLight);
-        int lightD = samplePackedLight(level, originPos, d, defaultPackedLight);
+        int lightA;
+        int lightB;
+        int lightC;
+        int lightD;
+        if (emissive) {
+            lightA = LightTexture.FULL_BRIGHT;
+            lightB = LightTexture.FULL_BRIGHT;
+            lightC = LightTexture.FULL_BRIGHT;
+            lightD = LightTexture.FULL_BRIGHT;
+        } else {
+            lightA = samplePackedLight(level, originPos, a, defaultPackedLight);
+            lightB = samplePackedLight(level, originPos, b, defaultPackedLight);
+            lightC = samplePackedLight(level, originPos, c, defaultPackedLight);
+            lightD = samplePackedLight(level, originPos, d, defaultPackedLight);
+        }
 
         putVertex(consumer, pose, normalMatrix, a, sprite.getU(uvA.u()), sprite.getV(uvA.v()), lightA, packedOverlay, normal);
         putVertex(consumer, pose, normalMatrix, b, sprite.getU(uvB.u()), sprite.getV(uvB.v()), lightB, packedOverlay, normal);
@@ -887,8 +905,8 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                     }
 
                     String textureRef = faceJson.get("texture").getAsString();
-                    ResourceLocation textureLocation = resolveTexture(textures, textureRef, sourceModelJson.getNamespace());
-                    if (textureLocation == null) {
+                    TextureReference textureReference = resolveTextureReference(textures, textureRef, sourceModelJson.getNamespace());
+                    if (textureReference == null) {
                         continue;
                     }
 
@@ -901,10 +919,11 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                             ? faceJson.get("rotation").getAsInt()
                             : 0;
 
-                    TextureAtlasSprite sprite = atlas.getSprite(textureLocation);
+                    TextureAtlasSprite sprite = atlas.getSprite(textureReference.textureLocation());
                     faces.add(buildFace(
                             direction,
                             sprite,
+                            textureReference.emissive(),
                             x1,
                             x2,
                             y1,
@@ -929,6 +948,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
 
     private static ModelFace buildFace(Direction direction,
                                        TextureAtlasSprite sprite,
+                                       boolean emissive,
                                        float x1,
                                        float x2,
                                        float y1,
@@ -978,6 +998,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
         return new ModelFace(
                 direction,
                 sprite,
+                emissive,
                 x1,
                 x2,
                 y1,
@@ -1069,16 +1090,20 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
     }
 
     @Nullable
-    private static ResourceLocation resolveTexture(Map<String, String> textures,
-                                                   String reference,
-                                                   String defaultNamespace) {
+    private static TextureReference resolveTextureReference(Map<String, String> textures,
+                                                            String reference,
+                                                            String defaultNamespace) {
         String value = reference;
         Set<String> seen = new HashSet<>();
+        boolean emissive = false;
 
         while (value.startsWith("#")) {
             String key = value.substring(1);
             if (!seen.add(key)) {
                 return null;
+            }
+            if (key.endsWith("_emissive")) {
+                emissive = true;
             }
 
             value = textures.get(key);
@@ -1092,7 +1117,14 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
         }
 
         String namespaced = value.contains(":") ? value : (defaultNamespace + ":" + value);
-        return ResourceLocation.tryParse(namespaced);
+        ResourceLocation textureLocation = ResourceLocation.tryParse(namespaced);
+        if (textureLocation == null) {
+            return null;
+        }
+        if (textureLocation.getPath().endsWith("_emissive")) {
+            emissive = true;
+        }
+        return new TextureReference(textureLocation, emissive);
     }
 
     @Nullable
