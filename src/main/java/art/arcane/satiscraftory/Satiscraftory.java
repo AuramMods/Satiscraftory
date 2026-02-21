@@ -2,14 +2,17 @@ package art.arcane.satiscraftory;
 
 import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.ConveyorEndBlock;
+import art.arcane.satiscraftory.block.SplitterBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
 import art.arcane.satiscraftory.block.entity.ConveyorEndBlockEntity;
+import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
 import art.arcane.satiscraftory.data.ConveyorTier;
 import art.arcane.satiscraftory.item.ConveyorItem;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -42,6 +45,10 @@ public class Satiscraftory {
             "conveyor_end",
             () -> new ConveyorEndBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noOcclusion())
     );
+    public static final RegistryObject<Block> SPLITTER = BLOCKS.register(
+            "splitter",
+            () -> new SplitterBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL))
+    );
 
     public static final RegistryObject<Item> CONVEYOR_1_ITEM = registerConveyorItem("conveyor_1", CONVEYOR_1);
     public static final RegistryObject<Item> CONVEYOR_2_ITEM = registerConveyorItem("conveyor_2", CONVEYOR_2);
@@ -49,6 +56,7 @@ public class Satiscraftory {
     public static final RegistryObject<Item> CONVEYOR_4_ITEM = registerConveyorItem("conveyor_4", CONVEYOR_4);
     public static final RegistryObject<Item> CONVEYOR_5_ITEM = registerConveyorItem("conveyor_5", CONVEYOR_5);
     public static final RegistryObject<Item> CONVEYOR_6_ITEM = registerConveyorItem("conveyor_6", CONVEYOR_6);
+    public static final RegistryObject<Item> SPLITTER_ITEM = ITEMS.register("splitter", () -> new BlockItem(SPLITTER.get(), new Item.Properties()));
 
     public static final RegistryObject<BlockEntityType<ConveyorBlockEntity>> CONVEYOR_BLOCK_ENTITY = BLOCK_ENTITIES.register(
             "conveyor_1",
@@ -66,6 +74,10 @@ public class Satiscraftory {
             "conveyor_end",
             () -> BlockEntityType.Builder.of(ConveyorEndBlockEntity::new, CONVEYOR_END.get()).build(null)
     );
+    public static final RegistryObject<BlockEntityType<SplitterBlockEntity>> SPLITTER_BLOCK_ENTITY = BLOCK_ENTITIES.register(
+            "splitter",
+            () -> BlockEntityType.Builder.of(SplitterBlockEntity::new, SPLITTER.get()).build(null)
+    );
 
     public static final RegistryObject<CreativeModeTab> TAB = CREATIVE_TABS.register(MODID+"_tab", () -> CreativeModeTab.builder()
             .title(Component.literal("Satiscraftory"))
@@ -77,6 +89,7 @@ public class Satiscraftory {
                 output.accept(CONVEYOR_4_ITEM.get());
                 output.accept(CONVEYOR_5_ITEM.get());
                 output.accept(CONVEYOR_6_ITEM.get());
+                output.accept(SPLITTER_ITEM.get());
             })
             .build());
 

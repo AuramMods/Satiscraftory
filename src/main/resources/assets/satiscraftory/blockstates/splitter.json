@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "satiscraftory:block/splitter"
+    },
+    "facing=east": {
+      "model": "satiscraftory:block/splitter",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "satiscraftory:block/splitter",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "satiscraftory:block/splitter",
+      "y": 270
+    }
+  }
+}
