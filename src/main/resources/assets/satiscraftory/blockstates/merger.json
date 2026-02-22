@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "satiscraftory:block/merger"
+    },
+    "facing=east": {
+      "model": "satiscraftory:block/merger",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "satiscraftory:block/merger",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "satiscraftory:block/merger",
+      "y": 270
+    }
+  }
+}

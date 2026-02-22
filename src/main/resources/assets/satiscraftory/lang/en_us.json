@@ -6,5 +6,6 @@
   "block.satiscraftory.conveyor_4": "Conveyor Belt Mk.4",
   "block.satiscraftory.conveyor_5": "Conveyor Belt Mk.5",
   "block.satiscraftory.conveyor_6": "Conveyor Belt Mk.6",
-  "block.satiscraftory.splitter": "Splitter"
+  "block.satiscraftory.splitter": "Splitter",
+  "block.satiscraftory.merger": "Merger"
 }
