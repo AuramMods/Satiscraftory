@@ -30,6 +30,12 @@ public final class ConveyorItemRenderer extends EntityRenderer<SplineVisualItemE
     }
 
     @Override
+    public Vec3 getRenderOffset(SplineVisualItemEntity visual, float partialTick) {
+        // Interpolate distance along the belt so a frame between ticks never cuts across a corner.
+        return visual.positionOnBelt(partialTick).subtract(visual.getPosition(partialTick));
+    }
+
+    @Override
     public void render(SplineVisualItemEntity visual, float yaw, float partialTick, PoseStack poseStack,
                        MultiBufferSource buffers, int packedLight) {
         ItemStack stack = visual.getItem();
@@ -38,7 +44,7 @@ public final class ConveyorItemRenderer extends EntityRenderer<SplineVisualItemE
         ItemTransform ground = model.getTransforms().getTransform(ItemDisplayContext.GROUND);
         Vector3f offset = ground.translation;
         float height = 0.1F + 0.25F * ground.scale.y();
-        Vec3 pivot = visual.getPosition(partialTick).add(offset.x(), height + offset.y(), offset.z());
+        Vec3 pivot = visual.positionOnBelt(partialTick).add(offset.x(), height + offset.y(), offset.z());
         Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         visual.turnToward(camera.subtract(pivot), Util.getNanos());
 

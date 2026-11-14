@@ -4,6 +4,8 @@ import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import art.arcane.satiscraftory.client.SatiscraftoryClient;
+import art.arcane.satiscraftory.data.route.BeltRoute;
+import art.arcane.satiscraftory.data.route.BeltRouteMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -39,21 +41,21 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 public class ConveyorBlockEntity extends BlockEntity {
     private static final int SLOTS_PER_BLOCK = 3;
     private static final int DEFAULT_TRAVEL_TICKS_PER_BLOCK = 60;
-    private static final int LENGTH_SAMPLE_SEGMENTS = 80;
     private static final int MAX_CLIENT_PREDICTION_STEPS = 256;
     private static final double MIN_CLIENT_CORRECTION_SLOTS_PER_TICK = 0.125D;
     private static final double CLIENT_CORRECTION_SPEED_FRACTION = 0.25D;
     private static final double VISUAL_RANGE_BLOCKS = 16.0D;
-    private static final double EDGE_OFFSET = 0.5D;
     private static final double ITEM_Y_OFFSET = 0.08D;
 
     private static final String END_POS_TAG = "end_pos";
     private static final String END_FACING_TAG = "end_facing";
+    private static final String ROUTE_MODE_TAG = "route_mode";
     private static final String BELT_LENGTH_BLOCKS_TAG = "belt_length_blocks";
     private static final String BUFFER_SLOTS_TAG = "buffer_slots";
     private static final String INVENTORY_TAG = "inventory";
@@ -68,6 +70,9 @@ public class ConveyorBlockEntity extends BlockEntity {
     @Nullable
     private BlockPos endPos;
     private Direction endFacing = Direction.NORTH;
+    private BeltRouteMode routeMode = BeltRouteMode.SPLINE;
+    private BeltRoute route;
+    private Direction routeStartFacing;
     private int beltLengthBlocks = 1;
     private int bufferSlots = SLOTS_PER_BLOCK;
     private int travelTicksPerBlock = DEFAULT_TRAVEL_TICKS_PER_BLOCK;
@@ -119,10 +124,22 @@ public class ConveyorBlockEntity extends BlockEntity {
         return travelTicksPerBlock;
     }
 
-    public void setEndData(BlockPos endPos, Direction endFacing) {
+    public BeltRoute getRoute() {
+        Direction startFacing = getFacing(getBlockState());
+        if (route == null || routeStartFacing != startFacing) {
+            BlockPos target = endPos == null ? worldPosition.relative(startFacing) : endPos;
+            route = routeMode.create(worldPosition, startFacing, target, getOutputSide());
+            routeStartFacing = startFacing;
+        }
+        return route;
+    }
+
+    public void setEndData(BlockPos endPos, Direction endFacing, BeltRouteMode mode) {
         BlockPos previousEndPos = this.endPos;
         this.endPos = endPos.immutable();
         this.endFacing = endFacing.getAxis().isHorizontal() ? endFacing : Direction.NORTH;
+        routeMode = mode;
+        route = null;
         recalculateLengthAndResize(false);
         nextEndMarkerValidationTick = Long.MIN_VALUE;
         if (level != null && !level.isClientSide) {
@@ -168,6 +185,7 @@ public class ConveyorBlockEntity extends BlockEntity {
             tag.put(END_POS_TAG, NbtUtils.writeBlockPos(endPos));
         }
         tag.putString(END_FACING_TAG, endFacing.getName());
+        tag.putString(ROUTE_MODE_TAG, routeMode.id());
         tag.putInt(BELT_LENGTH_BLOCKS_TAG, beltLengthBlocks);
         tag.putInt(BUFFER_SLOTS_TAG, bufferSlots);
         tag.put(INVENTORY_TAG, inventory.serializeNBT());
@@ -188,6 +206,9 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         super.load(tag);
 
+        BlockPos previousEndPos = endPos;
+        Direction previousEndFacing = endFacing;
+        BeltRouteMode previousMode = routeMode;
         endPos = tag.contains(END_POS_TAG, Tag.TAG_COMPOUND)
                 ? NbtUtils.readBlockPos(tag.getCompound(END_POS_TAG))
                 : null;
@@ -200,6 +221,12 @@ public class ConveyorBlockEntity extends BlockEntity {
             }
         } else {
             endFacing = fallbackFacing();
+        }
+
+        BeltRouteMode loadedMode = BeltRouteMode.byId(tag.getString(ROUTE_MODE_TAG));
+        routeMode = loadedMode == null ? BeltRouteMode.SPLINE : loadedMode;
+        if (!Objects.equals(previousEndPos, endPos) || previousEndFacing != endFacing || previousMode != routeMode) {
+            route = null;
         }
 
         beltLengthBlocks = Math.max(1, tag.getInt(BELT_LENGTH_BLOCKS_TAG));
@@ -1009,8 +1036,7 @@ public class ConveyorBlockEntity extends BlockEntity {
     }
 
     private boolean recalculateLengthAndResize(boolean dropOverflow) {
-        int computedLength = computeBeltLengthBlocks();
-        computedLength = Math.max(1, computedLength);
+        int computedLength = endPos == null ? 1 : getRoute().lengthInBlocks();
 
         boolean changed = false;
         if (beltLengthBlocks != computedLength) {
@@ -1025,50 +1051,6 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
 
         return changed;
-    }
-
-    private int computeBeltLengthBlocks() {
-        if (endPos == null) {
-            return 1;
-        }
-
-        Direction startFacing = getFacing(getBlockState());
-        Vec3 start = anchorToEdge(new Vec3(
-                worldPosition.getX() + 0.5D,
-                worldPosition.getY(),
-                worldPosition.getZ() + 0.5D
-        ), startFacing.getOpposite());
-        Vec3 end = anchorToEdge(new Vec3(
-                endPos.getX() + 0.5D,
-                endPos.getY(),
-                endPos.getZ() + 0.5D
-        ), endFacing);
-
-        Vec3 startForward = directionVector(startFacing);
-        Vec3 endForward = directionVector(endFacing);
-
-        Vec3 flatDelta = new Vec3(end.x - start.x, 0.0D, end.z - start.z);
-        double horizontalDistance = Math.sqrt(flatDelta.lengthSqr());
-        double tangentLength = Math.max(0.85D, Math.min(4.0D, horizontalDistance * 0.45D));
-
-        Vec3 c1 = start.add(startForward.scale(tangentLength));
-        Vec3 c2 = end.subtract(endForward.scale(tangentLength));
-
-        Vec3 previous = sampleBezier(start, c1, c2, end, 0.0D);
-        double arcLength = 0.0D;
-
-        for (int i = 1; i <= LENGTH_SAMPLE_SEGMENTS; i++) {
-            double t = i / (double) LENGTH_SAMPLE_SEGMENTS;
-            Vec3 current = sampleBezier(start, c1, c2, end, t);
-            arcLength += current.distanceTo(previous);
-            previous = current;
-        }
-
-        if (!Double.isFinite(arcLength)) {
-            return 1;
-        }
-
-        return Math.max(1, (int) Math.ceil(arcLength));
     }
 
     private void resizeBuffer(int desiredSlots, boolean dropOverflow) {
@@ -1374,7 +1356,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         SplineVisualItemEntity visual = clientVisualItems.get(item.visualKey);
         if (visual == null || !visual.isAlive()) {
             Vec3 position = computeVisualPositionForSlotUnits(item.slotUnits);
-            SplineVisualItemEntity created = new SplineVisualItemEntity(level, position, single, item.slotUnits);
+            SplineVisualItemEntity created = new SplineVisualItemEntity(this, level, position, single, item.slotUnits);
             if (!SatiscraftoryClient.addConveyorItemVisual(created)) {
                 clientVisualItems.remove(item.visualKey);
                 return;
@@ -1389,6 +1371,7 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         // A fresh snapshot can shift the prediction. Recover the error over several ticks.
         double delta = item.slotUnits - visual.slotUnits;
+        visual.previousSlotUnits = visual.slotUnits;
         visual.slotUnits += clamp(delta, -maxCorrection, slotsPerTick + maxCorrection);
         Vec3 position = computeVisualPositionForSlotUnits(visual.slotUnits);
 
@@ -1423,74 +1406,9 @@ public class ConveyorBlockEntity extends BlockEntity {
         clientVisualItems.clear();
     }
 
-    private Vec3 computeVisualPosition(double progress) {
-        Direction startFacing = getFacing(getBlockState());
-        Direction outputSide = getOutputSide();
-
-        Vec3 start = anchorToEdge(new Vec3(
-                worldPosition.getX() + 0.5D,
-                worldPosition.getY() + ITEM_Y_OFFSET,
-                worldPosition.getZ() + 0.5D
-        ), startFacing.getOpposite());
-
-        Vec3 endCenter;
-        if (endPos != null) {
-            endCenter = new Vec3(
-                    endPos.getX() + 0.5D,
-                    endPos.getY() + ITEM_Y_OFFSET,
-                    endPos.getZ() + 0.5D
-            );
-        } else {
-            endCenter = new Vec3(
-                    worldPosition.getX() + 0.5D + startFacing.getStepX(),
-                    worldPosition.getY() + ITEM_Y_OFFSET,
-                    worldPosition.getZ() + 0.5D + startFacing.getStepZ()
-            );
-        }
-        Vec3 end = anchorToEdge(endCenter, outputSide);
-
-        Vec3 startForward = directionVector(startFacing);
-        Vec3 endForward = directionVector(outputSide);
-
-        Vec3 flatDelta = new Vec3(end.x - start.x, 0.0D, end.z - start.z);
-        double horizontalDistance = Math.sqrt(flatDelta.lengthSqr());
-        double tangentLength = Math.max(0.85D, Math.min(4.0D, horizontalDistance * 0.45D));
-
-        Vec3 c1 = start.add(startForward.scale(tangentLength));
-        Vec3 c2 = end.subtract(endForward.scale(tangentLength));
-
-        return sampleBezier(start, c1, c2, end, clamp(progress, 0.0D, 1.0D));
-    }
-
     private Vec3 computeVisualPositionForSlotUnits(double slotUnits) {
-        double position = Math.max(0.0D, slotUnits);
-        position = Math.min(bufferSlots - 1.0E-6D, position);
-        double progress = clamp(position / bufferSlots, 0.0D, 0.999999D);
-        return computeVisualPosition(progress);
-    }
-
-    private static Vec3 sampleBezier(Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, double t) {
-        double oneMinus = 1.0D - t;
-        double oneMinus2 = oneMinus * oneMinus;
-        double oneMinus3 = oneMinus2 * oneMinus;
-        double t2 = t * t;
-        double t3 = t2 * t;
-        return new Vec3(
-                (p0.x * oneMinus3) + (3.0D * p1.x * oneMinus2 * t) + (3.0D * p2.x * oneMinus * t2) + (p3.x * t3),
-                (p0.y * oneMinus3) + (3.0D * p1.y * oneMinus2 * t) + (3.0D * p2.y * oneMinus * t2) + (p3.y * t3),
-                (p0.z * oneMinus3) + (3.0D * p1.z * oneMinus2 * t) + (3.0D * p2.z * oneMinus * t2) + (p3.z * t3)
-        );
-    }
-
-    private static Vec3 anchorToEdge(Vec3 center, Direction direction) {
-        return center.add(direction.getStepX() * EDGE_OFFSET, 0.0D, direction.getStepZ() * EDGE_OFFSET);
-    }
-
-    private static Vec3 directionVector(Direction direction) {
-        if (direction.getAxis().isHorizontal()) {
-            return new Vec3(direction.getStepX(), 0.0D, direction.getStepZ());
-        }
-        return new Vec3(0.0D, 0.0D, -1.0D);
+        return getRoute().position(slotUnits / bufferSlots)
+                .add(worldPosition.getX(), worldPosition.getY() + ITEM_Y_OFFSET, worldPosition.getZ());
     }
 
     private static double clamp(double value, double min, double max) {
@@ -1689,13 +1607,18 @@ public class ConveyorBlockEntity extends BlockEntity {
         // Leave 10% of the angle error after 100 ms, independent of frame rate.
         private static final double TURN_DECAY_PER_NANO = Math.log(10.0D) / 100_000_000.0D;
 
+        private final ConveyorBlockEntity conveyor;
+        private double previousSlotUnits;
         private double slotUnits;
         private long lastFacingUpdateNanos = Long.MIN_VALUE;
         private float facingYaw;
         private float facingPitch;
 
-        private SplineVisualItemEntity(Level level, Vec3 position, ItemStack stack, double slotUnits) {
+        private SplineVisualItemEntity(ConveyorBlockEntity conveyor, Level level, Vec3 position,
+                                       ItemStack stack, double slotUnits) {
             super(Satiscraftory.CONVEYOR_ITEM_VISUAL.get(), level);
+            this.conveyor = conveyor;
+            this.previousSlotUnits = slotUnits;
             this.slotUnits = slotUnits;
             noPhysics = true;
             setNoGravity(true);
@@ -1704,6 +1627,10 @@ public class ConveyorBlockEntity extends BlockEntity {
             setItem(stack);
             setPos(position.x, position.y, position.z);
             setOldPosAndRot();
+        }
+
+        public Vec3 positionOnBelt(float partialTick) {
+            return conveyor.computeVisualPositionForSlotUnits(Mth.lerp(partialTick, previousSlotUnits, slotUnits));
         }
 
         @Override

@@ -11,6 +11,7 @@ import art.arcane.satiscraftory.block.entity.MergerBlockEntity;
 import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
 import art.arcane.satiscraftory.data.ConveyorTier;
 import art.arcane.satiscraftory.item.ConveyorItem;
+import art.arcane.satiscraftory.network.BeltPlacementNetwork;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -121,6 +122,7 @@ public class Satiscraftory {
 
 
     public Satiscraftory(FMLJavaModLoadingContext context) {
+        BeltPlacementNetwork.register();
         IEventBus modEventBus = context.getModEventBus();
         BLOCKS.register(modEventBus);
         ITEMS.register(modEventBus);

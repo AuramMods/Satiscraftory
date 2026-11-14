@@ -2,6 +2,7 @@ package art.arcane.satiscraftory.client.render;
 
 import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
+import art.arcane.satiscraftory.data.route.BeltRoute;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -93,8 +94,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
     }
 
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final int CURVE_SEGMENTS = 96;
-    private static final float EDGE_OFFSET = 0.5F;
+    private static final double MAX_STRIP_LENGTH = 0.25D;
     private static final float EPSILON = 1.0E-6F;
     private static final float WRAP_SEAM_RAW_EPSILON_SCALE = 0.0001F;
     private static final int MAX_WRAP_SPLITS_PER_STRIP = 16;
@@ -134,46 +134,14 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
             return;
         }
 
-        Direction startFacing = getFacing(blockEntity.getBlockState());
-        Direction endFacing = blockEntity.getEndFacing();
-
-        Vec3 start = anchorToEdge(new Vec3(0.5D, 0.0D, 0.5D), startFacing.getOpposite());
-        Vec3 end = anchorToEdge(toLocalCenter(blockEntity.getBlockPos(), endPos, 0.0D), endFacing);
-
-        Vec3 startForward = directionVector(startFacing);
-        Vec3 endForward = directionVector(endFacing);
-
-        Vec3 flatDelta = new Vec3(end.x - start.x, 0.0D, end.z - start.z);
-        double horizontalDistance = Math.sqrt(flatDelta.lengthSqr());
-        double tangentLength = Math.max(0.85D, Math.min(4.0D, horizontalDistance * 0.45D));
-
-        Vec3 c1 = start.add(startForward.scale(tangentLength));
-        Vec3 c2 = end.subtract(endForward.scale(tangentLength));
-
-        Vec3[] points = new Vec3[CURVE_SEGMENTS + 1];
-        Vec3[] perpendiculars = new Vec3[CURVE_SEGMENTS + 1];
-        Vec3[] tangents = new Vec3[CURVE_SEGMENTS + 1];
-        double[] distances = new double[CURVE_SEGMENTS + 1];
-
-        for (int i = 0; i <= CURVE_SEGMENTS; i++) {
-            double t = i / (double) CURVE_SEGMENTS;
-            points[i] = sampleBezier(start, c1, c2, end, t);
-            if (i > 0) {
-                distances[i] = distances[i - 1] + points[i].distanceTo(points[i - 1]);
-            }
-        }
-
-        for (int i = 0; i <= CURVE_SEGMENTS; i++) {
-            tangents[i] = tangentAt(points, i, startForward);
-            perpendiculars[i] = perpendicularFromTangent(tangents[i], startForward);
-        }
+        BeltRoute route = blockEntity.getRoute();
 
         VertexConsumer cutoutBuffer = bufferSource.getBuffer(RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS));
         Matrix4f pose = poseStack.last().pose();
         Matrix3f normal = poseStack.last().normal();
 
         for (ModelFace face : template.faces()) {
-            renderSplineFace(
+            renderRouteFace(
                     face,
                     cutoutBuffer,
                     pose,
@@ -182,10 +150,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                     blockEntity.getBlockPos(),
                     packedLight,
                     packedOverlay,
-                    points,
-                    perpendiculars,
-                    tangents,
-                    distances
+                    route
             );
         }
     }
@@ -200,43 +165,38 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
         return 256;
     }
 
-    private static void renderSplineFace(ModelFace face,
-                                         VertexConsumer consumer,
-                                         Matrix4f pose,
-                                         Matrix3f normalMatrix,
-                                         Level level,
-                                         BlockPos originPos,
-                                         int defaultPackedLight,
-                                         int packedOverlay,
-                                         Vec3[] points,
-                                         Vec3[] perpendiculars,
-                                         Vec3[] tangents,
-                                         double[] distances) {
-        StripAxis stripAxis = stripAxis(face.direction());
-        int strips = stripAxis == StripAxis.NONE
-                ? 1
-                : Math.max(1, (int) Math.ceil((face.z2() - face.z1()) * CURVE_SEGMENTS));
+    private static void renderRouteFace(ModelFace face,
+                                        VertexConsumer consumer,
+                                        Matrix4f pose,
+                                        Matrix3f normalMatrix,
+                                        Level level,
+                                        BlockPos originPos,
+                                        int defaultPackedLight,
+                                        int packedOverlay,
+                                        BeltRoute route) {
+        StripAxis axis = stripAxis(face.direction());
+        if (axis == StripAxis.NONE) {
+            renderStripSegment(face, axis, 0.0F, 1.0F, consumer, pose, normalMatrix,
+                    level, originPos, defaultPackedLight, packedOverlay, route);
+            return;
+        }
 
-        for (int strip = 0; strip < strips; strip++) {
-            float stripStart = strip / (float) strips;
-            float stripEnd = (strip + 1) / (float) strips;
-            renderStripRange(
-                    face,
-                    stripAxis,
-                    stripStart,
-                    stripEnd,
-                    consumer,
-                    pose,
-                    normalMatrix,
-                    level,
-                    originPos,
-                    defaultPackedLight,
-                    packedOverlay,
-                    points,
-                    perpendiculars,
-                    tangents,
-                    distances
-            );
+        // Split exactly at route vertices so faces never cut across a corner or ramp transition.
+        for (int i = 1; i < route.pointCount(); i++) {
+            float start = Math.max(face.z1(), (float) route.progressAtPoint(i - 1));
+            float end = Math.min(face.z2(), (float) route.progressAtPoint(i));
+            if (end - start <= EPSILON) {
+                continue;
+            }
+
+            int strips = Math.max(1, (int) Math.ceil((end - start) * route.length() / MAX_STRIP_LENGTH));
+            float from = invLerp(face.z1(), face.z2(), start);
+            float to = invLerp(face.z1(), face.z2(), end);
+            for (int strip = 0; strip < strips; strip++) {
+                renderStripRange(face, axis, lerp(from, to, strip / (float) strips),
+                        lerp(from, to, (strip + 1) / (float) strips), consumer, pose, normalMatrix,
+                        level, originPos, defaultPackedLight, packedOverlay, route);
+            }
         }
     }
 
@@ -251,15 +211,12 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                                          BlockPos originPos,
                                          int defaultPackedLight,
                                          int packedOverlay,
-                                         Vec3[] points,
-                                         Vec3[] perpendiculars,
-                                         Vec3[] tangents,
-                                         double[] distances) {
+                                         BeltRoute route) {
         if (!face.repeatEnabled() || face.repeatWrapRange() < EPSILON) {
             renderStripSegment(
                     face, stripAxis, stripStart, stripEnd, consumer, pose, normalMatrix,
                     level, originPos, defaultPackedLight, packedOverlay,
-                    points, perpendiculars, tangents, distances
+                    route
             );
             return;
         }
@@ -268,8 +225,8 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
         for (int i = 0; i < MAX_WRAP_SPLITS_PER_STRIP && (stripEnd - currentStart) > EPSILON; i++) {
             float currentEnd = stripEnd;
             float nextStart = currentEnd;
-            float rawStart = repeatRawAt(face, distances, currentStart);
-            float rawEnd = repeatRawAt(face, distances, currentEnd);
+            float rawStart = repeatRawAt(face, route, currentStart);
+            float rawEnd = repeatRawAt(face, route, currentEnd);
             float delta = rawEnd - rawStart;
 
             if (Math.abs(delta) > EPSILON) {
@@ -287,8 +244,8 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                     float beforeBoundaryRaw = boundary + (delta > 0.0F ? -rawSeamEpsilon : rawSeamEpsilon);
                     float afterBoundaryRaw = boundary + (delta > 0.0F ? rawSeamEpsilon : -rawSeamEpsilon);
 
-                    float splitBefore = findSplitTForRaw(face, distances, currentStart, currentEnd, beforeBoundaryRaw, delta > 0.0F);
-                    float splitAfter = findSplitTForRaw(face, distances, currentStart, currentEnd, afterBoundaryRaw, delta > 0.0F);
+                    float splitBefore = findSplitTForRaw(face, route, currentStart, currentEnd, beforeBoundaryRaw, delta > 0.0F);
+                    float splitAfter = findSplitTForRaw(face, route, currentStart, currentEnd, afterBoundaryRaw, delta > 0.0F);
 
                     if ((splitBefore - currentStart) > EPSILON
                             && (currentEnd - splitAfter) > EPSILON
@@ -296,7 +253,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                         currentEnd = splitBefore;
                         nextStart = splitAfter;
                     } else {
-                        float split = findSplitTForRaw(face, distances, currentStart, currentEnd, boundary, delta > 0.0F);
+                        float split = findSplitTForRaw(face, route, currentStart, currentEnd, boundary, delta > 0.0F);
                         if ((split - currentStart) > EPSILON && (currentEnd - split) > EPSILON) {
                             currentEnd = split;
                             nextStart = split;
@@ -309,7 +266,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                 renderStripSegment(
                         face, stripAxis, currentStart, currentEnd, consumer, pose, normalMatrix,
                         level, originPos, defaultPackedLight, packedOverlay,
-                        points, perpendiculars, tangents, distances
+                        route
                 );
             }
 
@@ -331,10 +288,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                                            BlockPos originPos,
                                            int defaultPackedLight,
                                            int packedOverlay,
-                                           Vec3[] points,
-                                           Vec3[] perpendiculars,
-                                           Vec3[] tangents,
-                                           double[] distances) {
+                                           BeltRoute route) {
         float zA = lerp(face.z1(), face.z2(), stripStart);
         float zB = lerp(face.z1(), face.z2(), stripEnd);
 
@@ -364,23 +318,24 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
             d = localVertex(face, 0.0F, 1.0F);
         }
 
-        Vec3 worldA = mapLocalToSpline(a, points, perpendiculars);
-        Vec3 worldB = mapLocalToSpline(b, points, perpendiculars);
-        Vec3 worldC = mapLocalToSpline(c, points, perpendiculars);
-        Vec3 worldD = mapLocalToSpline(d, points, perpendiculars);
+        Vec3 worldA = mapLocalToRoute(a, route);
+        Vec3 worldB = mapLocalToRoute(b, route);
+        Vec3 worldC = mapLocalToRoute(c, route);
+        Vec3 worldD = mapLocalToRoute(d, route);
 
-        double distA = sampleDistance(distances, a.z());
-        double distB = sampleDistance(distances, b.z());
-        double distC = sampleDistance(distances, c.z());
-        double distD = sampleDistance(distances, d.z());
-
-        UvPixel uvA = uvPixel(face, a, distA);
-        UvPixel uvB = uvPixel(face, b, distB);
-        UvPixel uvC = uvPixel(face, c, distC);
-        UvPixel uvD = uvPixel(face, d, distD);
+        double distA = route.length() * a.z();
+        double distB = route.length() * b.z();
+        double distC = route.length() * c.z();
+        double distD = route.length() * d.z();
 
         float normalT = (zA + zB) * 0.5F;
-        Vec3 preferredNormal = expectedNormal(face.direction(), normalT, perpendiculars, tangents);
+        double midDistance = route.length() * normalT;
+        UvPixel uvA = uvPixel(face, a, distA, midDistance);
+        UvPixel uvB = uvPixel(face, b, distB, midDistance);
+        UvPixel uvC = uvPixel(face, c, distC, midDistance);
+        UvPixel uvD = uvPixel(face, d, distD, midDistance);
+
+        Vec3 preferredNormal = expectedNormal(face.direction(), normalT, route);
         emitQuad(
                 consumer,
                 pose,
@@ -403,28 +358,26 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
         );
     }
 
-    private static Vec3 mapLocalToSpline(LocalVertex local, Vec3[] points, Vec3[] perpendiculars) {
-        Vec3 center = sampleVec(points, local.z());
-        Vec3 perpendicular = samplePerpendicular(perpendiculars, local.z());
-        double xOffset = local.x() - 0.5D;
-        return center.add(perpendicular.scale(xOffset)).add(0.0D, local.y(), 0.0D);
+    private static Vec3 mapLocalToRoute(LocalVertex local, BeltRoute route) {
+        Vec3 side = route.lateral(local.z());
+        return route.position(local.z()).add(side.scale(local.x() - 0.5D)).add(0.0D, local.y(), 0.0D);
     }
 
-    private static UvPixel uvPixel(ModelFace face, LocalVertex local, double distanceAlongSpline) {
+    private static UvPixel uvPixel(ModelFace face, LocalVertex local, double distance, double midDistance) {
         FaceParams rotated = rotateParams(local.s(), local.t(), face.rotation());
         float u = lerp(face.u1(), face.u2(), rotated.s());
         float v = lerp(face.v1(), face.v2(), rotated.t());
 
         if (face.repeatEnabled()) {
-            float rawRepeated = face.repeatStart() + ((float) distanceAlongSpline * face.repeatPixelsPerBlock());
+            float rawRepeated = face.repeatStart() + ((float) distance * face.repeatPixelsPerBlock());
             float repeated = wrapToRange(rawRepeated, face.repeatMin(), face.repeatWrapRange());
 
-            // Preserve continuity at the exact start edge for negative UV flow.
-            // Without this, t=0 can fold from max->min and create a tiny flipped sliver.
-            if (face.repeatPixelsPerBlock() < 0.0F
-                    && Math.abs(local.z() - face.z1()) < EPSILON
-                    && Math.abs(repeated - face.repeatMin()) < 1.0E-5F) {
-                repeated = face.repeatMin() + face.repeatWrapRange();
+            // Select the wrap edge on this strip's side of an exact UV seam.
+            if (Math.abs(repeated - face.repeatMin()) < 1.0E-5F) {
+                float rawMiddle = face.repeatStart() + ((float) midDistance * face.repeatPixelsPerBlock());
+                if (rawRepeated > rawMiddle) {
+                    repeated = face.repeatMin() + face.repeatWrapRange();
+                }
             }
 
             if (face.repeatAxis() == AlongAxis.U) {
@@ -437,8 +390,9 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
         return new UvPixel(u, v);
     }
 
-    private static float repeatRawAt(ModelFace face, double[] distances, float t) {
-        return face.repeatStart() + ((float) sampleDistance(distances, t) * face.repeatPixelsPerBlock());
+    private static float repeatRawAt(ModelFace face, BeltRoute route, float t) {
+        double distance = route.length() * lerp(face.z1(), face.z2(), t);
+        return face.repeatStart() + ((float) distance * face.repeatPixelsPerBlock());
     }
 
     private static int repeatBucket(float rawValue, float repeatMin, float repeatRange, boolean increasing) {
@@ -452,7 +406,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
     }
 
     private static float findSplitTForRaw(ModelFace face,
-                                          double[] distances,
+                                          BeltRoute route,
                                           float tMin,
                                           float tMax,
                                           float boundaryRawValue,
@@ -461,7 +415,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
         float high = tMax;
         for (int i = 0; i < 24; i++) {
             float mid = (low + high) * 0.5F;
-            float raw = repeatRawAt(face, distances, mid);
+            float raw = repeatRawAt(face, route, mid);
             if ((raw < boundaryRawValue) == increasing) {
                 low = mid;
             } else {
@@ -586,17 +540,9 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
         };
     }
 
-    private static Vec3 expectedNormal(Direction faceDirection,
-                                       float t,
-                                       Vec3[] perpendiculars,
-                                       Vec3[] tangents) {
-        Vec3 perpendicular = samplePerpendicular(perpendiculars, t);
-        Vec3 tangent = sampleVec(tangents, t);
-        if (tangent.lengthSqr() < 1.0E-8D) {
-            tangent = new Vec3(0.0D, 0.0D, 1.0D);
-        } else {
-            tangent = tangent.normalize();
-        }
+    private static Vec3 expectedNormal(Direction faceDirection, float t, BeltRoute route) {
+        Vec3 perpendicular = route.lateral(t).normalize();
+        Vec3 tangent = route.tangent(t);
 
         Vec3 local = switch (faceDirection) {
             case EAST -> new Vec3(1.0D, 0.0D, 0.0D);
@@ -647,65 +593,6 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
                 .endVertex();
     }
 
-    private static Vec3 tangentAt(Vec3[] points, int index, Vec3 fallbackForward) {
-        Vec3 tangent;
-        if (index == 0) {
-            tangent = points[1].subtract(points[0]);
-        } else if (index == points.length - 1) {
-            tangent = points[index].subtract(points[index - 1]);
-        } else {
-            tangent = points[index + 1].subtract(points[index - 1]);
-        }
-
-        if (tangent.lengthSqr() < 1.0E-8D) {
-            tangent = fallbackForward;
-        }
-
-        if (tangent.lengthSqr() < 1.0E-8D) {
-            return new Vec3(0.0D, 0.0D, 1.0D);
-        }
-        return tangent.normalize();
-    }
-
-    private static Vec3 perpendicularFromTangent(Vec3 tangent, Vec3 fallbackForward) {
-        Vec3 horizontal = new Vec3(tangent.x, 0.0D, tangent.z);
-        if (horizontal.lengthSqr() < 1.0E-8D) {
-            horizontal = new Vec3(fallbackForward.x, 0.0D, fallbackForward.z);
-        }
-        if (horizontal.lengthSqr() < 1.0E-8D) {
-            horizontal = new Vec3(1.0D, 0.0D, 0.0D);
-        } else {
-            horizontal = horizontal.normalize();
-        }
-
-        return new Vec3(-horizontal.z, 0.0D, horizontal.x);
-    }
-
-    private static Vec3 sampleVec(Vec3[] values, double t) {
-        double clamped = clamp(t, 0.0D, 1.0D);
-        double scaled = clamped * CURVE_SEGMENTS;
-        int index = Math.min((int) Math.floor(scaled), CURVE_SEGMENTS - 1);
-        double frac = scaled - index;
-        return lerp(values[index], values[index + 1], frac);
-    }
-
-    private static Vec3 samplePerpendicular(Vec3[] values, double t) {
-        Vec3 sampled = sampleVec(values, t);
-        Vec3 horizontal = new Vec3(sampled.x, 0.0D, sampled.z);
-        if (horizontal.lengthSqr() < 1.0E-8D) {
-            return new Vec3(1.0D, 0.0D, 0.0D);
-        }
-        return horizontal.normalize();
-    }
-
-    private static double sampleDistance(double[] values, double t) {
-        double clamped = clamp(t, 0.0D, 1.0D);
-        double scaled = clamped * CURVE_SEGMENTS;
-        int index = Math.min((int) Math.floor(scaled), CURVE_SEGMENTS - 1);
-        double frac = scaled - index;
-        return values[index] + ((values[index + 1] - values[index]) * frac);
-    }
-
     private static float wrapToRange(float value, float min, float range) {
         if (range < EPSILON) {
             return value;
@@ -727,52 +614,8 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
         return Math.max(0.0F, Math.min(1.0F, value));
     }
 
-    private static double clamp(double value, double min, double max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
     private static float lerp(float a, float b, float t) {
         return a + ((b - a) * t);
-    }
-
-    private static Vec3 lerp(Vec3 a, Vec3 b, double t) {
-        return new Vec3(
-                a.x + ((b.x - a.x) * t),
-                a.y + ((b.y - a.y) * t),
-                a.z + ((b.z - a.z) * t)
-        );
-    }
-
-    private static Vec3 sampleBezier(Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, double t) {
-        double oneMinus = 1.0D - t;
-        double oneMinus2 = oneMinus * oneMinus;
-        double oneMinus3 = oneMinus2 * oneMinus;
-        double t2 = t * t;
-        double t3 = t2 * t;
-        return new Vec3(
-                (p0.x * oneMinus3) + (3.0D * p1.x * oneMinus2 * t) + (3.0D * p2.x * oneMinus * t2) + (p3.x * t3),
-                (p0.y * oneMinus3) + (3.0D * p1.y * oneMinus2 * t) + (3.0D * p2.y * oneMinus * t2) + (p3.y * t3),
-                (p0.z * oneMinus3) + (3.0D * p1.z * oneMinus2 * t) + (3.0D * p2.z * oneMinus * t2) + (p3.z * t3)
-        );
-    }
-
-    private static Vec3 toLocalCenter(BlockPos origin, BlockPos target, double yOffset) {
-        return new Vec3(
-                (target.getX() - origin.getX()) + 0.5D,
-                (target.getY() - origin.getY()) + yOffset,
-                (target.getZ() - origin.getZ()) + 0.5D
-        );
-    }
-
-    private static Vec3 anchorToEdge(Vec3 center, Direction direction) {
-        return center.add(direction.getStepX() * EDGE_OFFSET, 0.0D, direction.getStepZ() * EDGE_OFFSET);
-    }
-
-    private static Vec3 directionVector(Direction direction) {
-        if (direction.getAxis().isHorizontal()) {
-            return new Vec3(direction.getStepX(), 0.0D, direction.getStepZ());
-        }
-        return new Vec3(0.0D, 0.0D, -1.0D);
     }
 
     private static int samplePackedLight(Level level, BlockPos originPos, Vec3 localPos, int fallbackLight) {
@@ -786,13 +629,6 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
             return fallbackLight;
         }
         return sampled;
-    }
-
-    private static Direction getFacing(BlockState state) {
-        if (state.hasProperty(ConveyorBlock.FACING)) {
-            return state.getValue(ConveyorBlock.FACING);
-        }
-        return Direction.NORTH;
     }
 
     private static ResourceLocation getSourceModelForState(BlockState state) {

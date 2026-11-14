@@ -6,6 +6,8 @@ import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
 import art.arcane.satiscraftory.block.entity.MergerBlockEntity;
 import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
+import art.arcane.satiscraftory.data.route.BeltRoute;
+import art.arcane.satiscraftory.data.route.BeltRouteMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -26,7 +28,6 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.sounds.SoundSource;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 
@@ -37,9 +38,8 @@ public class ConveyorItem extends BlockItem {
     private static final String START_POS_TAG = "start_pos";
     private static final String START_FACING_TAG = "start_facing";
     private static final String START_DIMENSION_TAG = "start_dimension";
-    public static final int MAX_SPLINE_LENGTH_BLOCKS = 16;
-    private static final int LENGTH_SAMPLE_SEGMENTS = 80;
-    private static final double EDGE_OFFSET = 0.5D;
+    private static final String ROUTE_MODE_TAG = "route_mode";
+    public static final int MAX_BELT_LENGTH_BLOCKS = 16;
 
     public ConveyorItem(Block block, Properties properties) {
         super(block, properties);
@@ -54,7 +54,7 @@ public class ConveyorItem extends BlockItem {
 
         clearPlacementState(player);
         if (!level.isClientSide) {
-            player.displayClientMessage(Component.literal("Spline placement canceled."), true);
+            player.displayClientMessage(Component.literal("Belt placement canceled."), true);
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
@@ -82,7 +82,7 @@ public class ConveyorItem extends BlockItem {
                 startPos = containerPos.relative(face);
                 if (!level.getBlockState(startPos).canBeReplaced()) {
                     if (!level.isClientSide) {
-                        player.displayClientMessage(Component.literal("Spline start is blocked: " + formatPos(startPos)), true);
+                        player.displayClientMessage(Component.literal("Belt start is blocked: " + formatPos(startPos)), true);
                     }
                     return InteractionResult.FAIL;
                 }
@@ -91,9 +91,11 @@ public class ConveyorItem extends BlockItem {
                 startPos = resolvePlacementPos(context);
             }
 
-            storePlacementState(player, new PlacementState(startPos, level.dimension().location().toString(), startFacing));
+            BeltRouteMode mode = BeltRouteMode.DEFAULT;
+            storePlacementState(player, new PlacementState(startPos, level.dimension().location().toString(), startFacing, mode));
             if (!level.isClientSide) {
-                player.displayClientMessage(Component.literal("Spline start set: " + formatPos(startPos)), true);
+                player.displayClientMessage(Component.literal("Belt start set: " + formatPos(startPos)
+                        + " | " + mode.label() + " (Tab to cycle)"), true);
             }
             return InteractionResult.sidedSuccess(level.isClientSide);
         }
@@ -101,7 +103,7 @@ public class ConveyorItem extends BlockItem {
         if (!state.dimensionId.equals(level.dimension().location().toString())) {
             clearPlacementState(player);
             if (!level.isClientSide) {
-                player.displayClientMessage(Component.literal("Spline start cleared (dimension changed)."), true);
+                player.displayClientMessage(Component.literal("Belt start cleared (dimension changed)."), true);
             }
             return InteractionResult.sidedSuccess(level.isClientSide);
         }
@@ -113,8 +115,9 @@ public class ConveyorItem extends BlockItem {
 
         Direction startFacing = state.resolveStartFacing(level, selectedPos, player.getDirection());
         Direction endFacing = resolveEndFacing(level, startPos, selectedPos, player.getDirection());
-        int estimatedLength = estimateSplineLengthBlocks(startPos, startFacing, selectedPos, endFacing);
-        boolean overMaxLength = estimatedLength > MAX_SPLINE_LENGTH_BLOCKS;
+        BeltRoute route = state.mode.create(startPos, startFacing, selectedPos, endFacing);
+        int estimatedLength = route.lengthInBlocks();
+        boolean overMaxLength = estimatedLength > MAX_BELT_LENGTH_BLOCKS;
 
         if (level.isClientSide) {
             // Keep the hologram active on rejected placements so the player can adjust the endpoint.
@@ -125,13 +128,13 @@ public class ConveyorItem extends BlockItem {
         }
 
         if (blockedStart) {
-            player.displayClientMessage(Component.literal("Spline start is blocked: " + formatPos(startPos)), true);
+            player.displayClientMessage(Component.literal("Belt start is blocked: " + formatPos(startPos)), true);
             return InteractionResult.FAIL;
         }
 
         if (overMaxLength) {
             player.displayClientMessage(
-                    Component.literal("Spline too long (" + estimatedLength + " > " + MAX_SPLINE_LENGTH_BLOCKS + " blocks)."),
+                    Component.literal("Belt too long (" + estimatedLength + " > " + MAX_BELT_LENGTH_BLOCKS + " blocks)."),
                     true
             );
             return InteractionResult.FAIL;
@@ -143,13 +146,13 @@ public class ConveyorItem extends BlockItem {
         }
 
         if (!level.setBlock(startPos, placeState, Block.UPDATE_ALL)) {
-            player.displayClientMessage(Component.literal("Failed to place spline start block."), true);
+            player.displayClientMessage(Component.literal("Failed to place belt start block."), true);
             return InteractionResult.FAIL;
         }
 
         BlockEntity blockEntity = level.getBlockEntity(startPos);
-        if (blockEntity instanceof ConveyorBlockEntity splineBlockEntity) {
-            splineBlockEntity.setEndData(selectedPos, endFacing);
+        if (blockEntity instanceof ConveyorBlockEntity conveyor) {
+            conveyor.setEndData(selectedPos, endFacing, state.mode);
         }
 
         playPlaceSound(level, startPos, placeState);
@@ -161,7 +164,7 @@ public class ConveyorItem extends BlockItem {
         }
 
         clearPlacementState(player);
-        player.displayClientMessage(Component.literal("Spline endpoint set: " + formatPos(selectedPos)), true);
+        player.displayClientMessage(Component.literal("Belt endpoint set: " + formatPos(selectedPos)), true);
         return InteractionResult.SUCCESS;
     }
 
@@ -217,13 +220,15 @@ public class ConveyorItem extends BlockItem {
         if (startFacing != null && !startFacing.getAxis().isHorizontal()) {
             startFacing = null;
         }
-        return new PlacementState(startPos, dimensionId, startFacing);
+        BeltRouteMode mode = BeltRouteMode.byId(placementData.getString(ROUTE_MODE_TAG));
+        return new PlacementState(startPos, dimensionId, startFacing, mode == null ? BeltRouteMode.DEFAULT : mode);
     }
 
     private static void storePlacementState(Player player, PlacementState state) {
         CompoundTag placementData = new CompoundTag();
         placementData.put(START_POS_TAG, NbtUtils.writeBlockPos(state.startPos));
         placementData.putString(START_DIMENSION_TAG, state.dimensionId);
+        placementData.putString(ROUTE_MODE_TAG, state.mode.id());
         if (state.startFacing != null) {
             placementData.putString(START_FACING_TAG, state.startFacing.getName());
         }
@@ -245,6 +250,20 @@ public class ConveyorItem extends BlockItem {
             return null;
         }
         return state;
+    }
+
+    public static boolean isHoldingBelt(Player player) {
+        return player.getMainHandItem().getItem() instanceof ConveyorItem
+                || player.getOffhandItem().getItem() instanceof ConveyorItem;
+    }
+
+    public static boolean selectRouteMode(Player player, BeltRouteMode mode) {
+        PlacementState state = getActivePlacement(player, player.level());
+        if (state == null) {
+            return false;
+        }
+        storePlacementState(player, new PlacementState(state.startPos, state.dimensionId, state.startFacing, mode));
+        return true;
     }
 
     public static BlockPos resolvePreviewEndPos(Level level, BlockPos clickedPos, Direction clickedFace) {
@@ -284,47 +303,6 @@ public class ConveyorItem extends BlockItem {
             return sinkDirection;
         }
         return dominant;
-    }
-
-    public static int estimateSplineLengthBlocks(BlockPos startPos, Direction startFacing, BlockPos endPos, Direction endFacing) {
-        Direction safeStartFacing = startFacing.getAxis().isHorizontal() ? startFacing : Direction.NORTH;
-        Direction safeEndFacing = endFacing.getAxis().isHorizontal() ? endFacing : Direction.NORTH;
-
-        Vec3 start = anchorToEdge(new Vec3(
-                startPos.getX() + 0.5D,
-                startPos.getY(),
-                startPos.getZ() + 0.5D
-        ), safeStartFacing.getOpposite());
-
-        Vec3 end = anchorToEdge(new Vec3(
-                endPos.getX() + 0.5D,
-                endPos.getY(),
-                endPos.getZ() + 0.5D
-        ), safeEndFacing);
-
-        Vec3 startForward = directionVector(safeStartFacing);
-        Vec3 endForward = directionVector(safeEndFacing);
-
-        Vec3 flatDelta = new Vec3(end.x - start.x, 0.0D, end.z - start.z);
-        double horizontalDistance = Math.sqrt(flatDelta.lengthSqr());
-        double tangentLength = Math.max(0.85D, Math.min(4.0D, horizontalDistance * 0.45D));
-
-        Vec3 c1 = start.add(startForward.scale(tangentLength));
-        Vec3 c2 = end.subtract(endForward.scale(tangentLength));
-
-        Vec3 previous = sampleBezier(start, c1, c2, end, 0.0D);
-        double arcLength = 0.0D;
-        for (int i = 1; i <= LENGTH_SAMPLE_SEGMENTS; i++) {
-            double t = i / (double) LENGTH_SAMPLE_SEGMENTS;
-            Vec3 current = sampleBezier(start, c1, c2, end, t);
-            arcLength += current.distanceTo(previous);
-            previous = current;
-        }
-
-        if (!Double.isFinite(arcLength)) {
-            return 1;
-        }
-        return Math.max(1, (int) Math.ceil(arcLength));
     }
 
     @Nullable
@@ -398,31 +376,7 @@ public class ConveyorItem extends BlockItem {
         };
     }
 
-    private static Vec3 sampleBezier(Vec3 p0, Vec3 p1, Vec3 p2, Vec3 p3, double t) {
-        double oneMinus = 1.0D - t;
-        double oneMinus2 = oneMinus * oneMinus;
-        double oneMinus3 = oneMinus2 * oneMinus;
-        double t2 = t * t;
-        double t3 = t2 * t;
-        return new Vec3(
-                (p0.x * oneMinus3) + (3.0D * p1.x * oneMinus2 * t) + (3.0D * p2.x * oneMinus * t2) + (p3.x * t3),
-                (p0.y * oneMinus3) + (3.0D * p1.y * oneMinus2 * t) + (3.0D * p2.y * oneMinus * t2) + (p3.y * t3),
-                (p0.z * oneMinus3) + (3.0D * p1.z * oneMinus2 * t) + (3.0D * p2.z * oneMinus * t2) + (p3.z * t3)
-        );
-    }
-
-    private static Vec3 anchorToEdge(Vec3 center, Direction direction) {
-        return center.add(direction.getStepX() * EDGE_OFFSET, 0.0D, direction.getStepZ() * EDGE_OFFSET);
-    }
-
-    private static Vec3 directionVector(Direction direction) {
-        if (direction.getAxis().isHorizontal()) {
-            return new Vec3(direction.getStepX(), 0.0D, direction.getStepZ());
-        }
-        return new Vec3(0.0D, 0.0D, -1.0D);
-    }
-
-    public record PlacementState(BlockPos startPos, String dimensionId, @Nullable Direction startFacing) {
+    public record PlacementState(BlockPos startPos, String dimensionId, @Nullable Direction startFacing, BeltRouteMode mode) {
         public Direction resolveStartFacing(Level level, BlockPos endPos, Direction fallback) {
             return startFacing != null ? startFacing : ConveyorItem.resolveStartFacing(level, startPos, endPos, fallback);
         }
