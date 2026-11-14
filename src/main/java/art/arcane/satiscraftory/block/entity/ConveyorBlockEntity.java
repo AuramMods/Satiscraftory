@@ -3,6 +3,7 @@ package art.arcane.satiscraftory.block.entity;
 import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.ConveyorEndBlock;
+import art.arcane.satiscraftory.client.SatiscraftoryClient;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -12,6 +13,7 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.Containers;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -30,8 +32,6 @@ import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemStackHandler;
 
 import javax.annotation.Nullable;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
@@ -91,15 +91,6 @@ public class ConveyorBlockEntity extends BlockEntity {
 
     private transient long lastClientAppliedRevision = Long.MIN_VALUE;
     private transient long clientSnapshotGameTime = Long.MIN_VALUE;
-
-    @Nullable
-    private transient Method clientPutNonPlayerEntityMethod;
-    @Nullable
-    private transient Method clientRemoveEntityMethod;
-    private transient boolean resolvedClientEntityMethods;
-    @Nullable
-    private transient Field itemBobOffsField;
-    private transient boolean resolvedItemBobField;
 
     public ConveyorBlockEntity(BlockPos pos, BlockState blockState) {
         super(Satiscraftory.CONVEYOR_BLOCK_ENTITY.get(), pos, blockState);
@@ -1384,16 +1375,13 @@ public class ConveyorBlockEntity extends BlockEntity {
         if (visual == null || !visual.isAlive()) {
             Vec3 position = computeVisualPositionForSlotUnits(item.slotUnits);
             SplineVisualItemEntity created = new SplineVisualItemEntity(level, position, single, item.slotUnits);
-            if (!spawnClientVisual(item.visualKey, created)) {
+            if (!SatiscraftoryClient.addConveyorItemVisual(created)) {
                 clientVisualItems.remove(item.visualKey);
                 return;
             }
-            setVisualBobPhase(created, 0.0F);
             clientVisualItems.put(item.visualKey, created);
             return;
         }
-
-        setVisualBobPhase(visual, 0.0F);
 
         if (!ItemStack.isSameItemSameTags(visual.getItem(), single)) {
             visual.setItem(single);
@@ -1417,13 +1405,8 @@ public class ConveyorBlockEntity extends BlockEntity {
         List<Long> staleKeys = new ArrayList<>();
         for (Map.Entry<Long, SplineVisualItemEntity> entry : clientVisualItems.entrySet()) {
             SplineVisualItemEntity visual = entry.getValue();
-            if (visual == null || !visual.isAlive() || !activeVisualKeys.contains(entry.getKey())) {
-                if (visual != null) {
-                    if (level != null && level.isClientSide) {
-                        removeClientEntityById(visual.getId());
-                    }
-                    visual.discard();
-                }
+            if (!visual.isAlive() || !activeVisualKeys.contains(entry.getKey())) {
+                visual.discard();
                 staleKeys.add(entry.getKey());
             }
         }
@@ -1434,17 +1417,7 @@ public class ConveyorBlockEntity extends BlockEntity {
     }
 
     private void clearClientVisuals() {
-        if (clientVisualItems.isEmpty()) {
-            return;
-        }
-
         for (SplineVisualItemEntity visual : clientVisualItems.values()) {
-            if (visual == null) {
-                continue;
-            }
-            if (level != null && level.isClientSide) {
-                removeClientEntityById(visual.getId());
-            }
             visual.discard();
         }
         clientVisualItems.clear();
@@ -1550,83 +1523,6 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
         if (maxId > 0L) {
             ensureGlobalItemIdAbove(maxId);
-        }
-    }
-
-    private boolean spawnClientVisual(long visualKey, SplineVisualItemEntity visual) {
-        if (level == null || !level.isClientSide) {
-            return false;
-        }
-
-        int id = visualEntityId(visualKey);
-        visual.setId(id);
-
-        if (addClientEntityById(id, visual)) {
-            return true;
-        }
-
-        return level.addFreshEntity(visual);
-    }
-
-    private int visualEntityId(long visualKey) {
-        long seed = worldPosition.asLong() ^ (0x9E3779B97F4A7C15L * visualKey);
-        int hash = (int) (seed ^ (seed >>> 32));
-        return hash | Integer.MIN_VALUE;
-    }
-
-    private boolean addClientEntityById(int id, Entity entity) {
-        if (level == null || !level.isClientSide) {
-            return false;
-        }
-
-        resolveClientEntityMethods();
-        if (clientPutNonPlayerEntityMethod == null) {
-            return false;
-        }
-
-        try {
-            clientPutNonPlayerEntityMethod.invoke(level, id, entity);
-            return true;
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    private void removeClientEntityById(int id) {
-        if (level == null || !level.isClientSide) {
-            return;
-        }
-
-        resolveClientEntityMethods();
-        if (clientRemoveEntityMethod == null) {
-            return;
-        }
-
-        try {
-            clientRemoveEntityMethod.invoke(level, id, Entity.RemovalReason.DISCARDED);
-        } catch (Throwable ignored) {
-            // Best effort.
-        }
-    }
-
-    private void resolveClientEntityMethods() {
-        if (resolvedClientEntityMethods || level == null) {
-            return;
-        }
-
-        resolvedClientEntityMethods = true;
-        Class<?> levelClass = level.getClass();
-
-        try {
-            clientPutNonPlayerEntityMethod = levelClass.getMethod("putNonPlayerEntity", int.class, Entity.class);
-        } catch (NoSuchMethodException ignored) {
-            clientPutNonPlayerEntityMethod = null;
-        }
-
-        try {
-            clientRemoveEntityMethod = levelClass.getMethod("removeEntity", int.class, Entity.RemovalReason.class);
-        } catch (NoSuchMethodException ignored) {
-            clientRemoveEntityMethod = null;
         }
     }
 
@@ -1789,20 +1685,25 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
     }
 
-    private static class SplineVisualItemEntity extends ItemEntity {
+    public static final class SplineVisualItemEntity extends ItemEntity {
+        // Leave 10% of the angle error after 100 ms, independent of frame rate.
+        private static final double TURN_DECAY_PER_NANO = Math.log(10.0D) / 100_000_000.0D;
+
         private double slotUnits;
+        private long lastFacingUpdateNanos = Long.MIN_VALUE;
+        private float facingYaw;
+        private float facingPitch;
 
         private SplineVisualItemEntity(Level level, Vec3 position, ItemStack stack, double slotUnits) {
-            super(level, position.x, position.y, position.z, stack.copy());
+            super(Satiscraftory.CONVEYOR_ITEM_VISUAL.get(), level);
             this.slotUnits = slotUnits;
-            this.noPhysics = true;
-            this.setNoGravity(true);
-            this.setNeverPickUp();
-            this.setPickUpDelay(32767);
-            this.setInvulnerable(true);
-            this.setDeltaMovement(Vec3.ZERO);
-            this.setYRot(0.0F);
-            this.setOldPosAndRot();
+            noPhysics = true;
+            setNoGravity(true);
+            setNeverPickUp();
+            setInvulnerable(true);
+            setItem(stack);
+            setPos(position.x, position.y, position.z);
+            setOldPosAndRot();
         }
 
         @Override
@@ -1815,41 +1716,29 @@ public class ConveyorBlockEntity extends BlockEntity {
             return false;
         }
 
-        @Override
-        public float getSpin(float partialTicks) {
-            return 0.0F;
-        }
-    }
-
-    private void setVisualBobPhase(SplineVisualItemEntity visual, float bobOffs) {
-        if (visual == null) {
-            return;
-        }
-
-        if (!resolvedItemBobField) {
-            resolvedItemBobField = true;
-            try {
-                itemBobOffsField = ItemEntity.class.getDeclaredField("bobOffs");
-            } catch (NoSuchFieldException first) {
-                try {
-                    itemBobOffsField = ItemEntity.class.getDeclaredField("f_31983_");
-                } catch (NoSuchFieldException ignored) {
-                    itemBobOffsField = null;
-                }
+        public void turnToward(Vec3 offsetToCamera, long nowNanos) {
+            double horizontalDistance = Math.hypot(offsetToCamera.x, offsetToCamera.z);
+            if (horizontalDistance < 1.0E-5D && Math.abs(offsetToCamera.y) < 1.0E-5D) {
+                return;
             }
-            if (itemBobOffsField != null) {
-                itemBobOffsField.setAccessible(true);
-            }
+
+            // The model's front is +Z. Keep the last yaw when we are directly above or below it.
+            float targetYaw = horizontalDistance < 1.0E-5D ? facingYaw
+                    : (float) Math.toDegrees(Math.atan2(offsetToCamera.x, offsetToCamera.z));
+            float targetPitch = (float) -Math.toDegrees(Math.atan2(offsetToCamera.y, horizontalDistance));
+            float blend = lastFacingUpdateNanos == Long.MIN_VALUE ? 1.0F
+                    : (float) -Math.expm1(-TURN_DECAY_PER_NANO * (nowNanos - lastFacingUpdateNanos));
+            facingYaw = Mth.wrapDegrees(Mth.rotLerp(blend, facingYaw, targetYaw));
+            facingPitch = Mth.lerp(blend, facingPitch, targetPitch);
+            lastFacingUpdateNanos = nowNanos;
         }
 
-        if (itemBobOffsField == null) {
-            return;
+        public float getFacingYaw() {
+            return facingYaw;
         }
 
-        try {
-            itemBobOffsField.setFloat(visual, bobOffs);
-        } catch (IllegalAccessException ignored) {
-            // Fallback is vanilla bob behavior.
+        public float getFacingPitch() {
+            return facingPitch;
         }
     }
 }

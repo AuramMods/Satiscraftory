@@ -5,6 +5,7 @@ import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import art.arcane.satiscraftory.block.MergerBlock;
 import art.arcane.satiscraftory.block.SplitterBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
+import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity.SplineVisualItemEntity;
 import art.arcane.satiscraftory.block.entity.ConveyorEndBlockEntity;
 import art.arcane.satiscraftory.block.entity.MergerBlockEntity;
 import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
@@ -14,6 +15,8 @@ import com.mojang.logging.LogUtils;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
@@ -35,7 +38,18 @@ public class Satiscraftory {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, MODID);
     public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, MODID);
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, MODID);
+    public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, MODID);
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
+
+    public static final RegistryObject<EntityType<SplineVisualItemEntity>> CONVEYOR_ITEM_VISUAL = ENTITIES.register(
+            "conveyor_item_visual",
+            () -> EntityType.Builder.<SplineVisualItemEntity>createNothing(MobCategory.MISC)
+                    .sized(0.25F, 0.25F)
+                    .noSave()
+                    .noSummon()
+                    .clientTrackingRange(0)
+                    .build(MODID + ":conveyor_item_visual")
+    );
 
     public static final RegistryObject<Block> CONVEYOR_1 = registerConveyorBlock("conveyor_1", ConveyorTier.MARK_1);
     public static final RegistryObject<Block> CONVEYOR_2 = registerConveyorBlock("conveyor_2", ConveyorTier.MARK_2);
@@ -111,6 +125,7 @@ public class Satiscraftory {
         BLOCKS.register(modEventBus);
         ITEMS.register(modEventBus);
         BLOCK_ENTITIES.register(modEventBus);
+        ENTITIES.register(modEventBus);
         CREATIVE_TABS.register(modEventBus);
         modEventBus.register(this);
     }

@@ -10,7 +10,9 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
@@ -41,6 +43,20 @@ public class ConveyorItem extends BlockItem {
     }
 
     @Override
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (getStoredStartPos(player, level) == null) {
+            return InteractionResultHolder.pass(stack);
+        }
+
+        clearPlacementState(player);
+        if (!level.isClientSide) {
+            player.displayClientMessage(Component.literal("Spline placement canceled."), true);
+        }
+        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+    }
+
+    @Override
     public InteractionResult useOn(UseOnContext context) {
         Player player = context.getPlayer();
         if (player == null) {
@@ -50,14 +66,6 @@ public class ConveyorItem extends BlockItem {
         Level level = context.getLevel();
         BlockPos selectedPos = resolvePlacementPos(context);
         PlacementState state = readPlacementState(player);
-
-        if (player.isShiftKeyDown()) {
-            clearPlacementState(player);
-            if (!level.isClientSide) {
-                player.displayClientMessage(Component.literal("Spline placement canceled."), true);
-            }
-            return InteractionResult.sidedSuccess(level.isClientSide);
-        }
 
         if (state == null) {
             storePlacementState(player, selectedPos, level.dimension().location().toString());
