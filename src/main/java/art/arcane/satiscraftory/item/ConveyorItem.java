@@ -75,12 +75,12 @@ public class ConveyorItem extends BlockItem {
             if (player.isShiftKeyDown()) {
                 Direction face = context.getClickedFace();
                 BlockPos containerPos = context.getClickedPos();
-                if (!face.getAxis().isHorizontal() || !hasContainerInventory(level, containerPos, face)) {
+                if (!isContainerInputFace(level, containerPos, face)) {
                     return InteractionResult.PASS;
                 }
 
                 startPos = containerPos.relative(face);
-                if (!level.getBlockState(startPos).canBeReplaced()) {
+                if (!canPlaceBeltStart(level, startPos)) {
                     if (!level.isClientSide) {
                         player.displayClientMessage(Component.literal("Belt start is blocked: " + formatPos(startPos)), true);
                     }
@@ -110,8 +110,7 @@ public class ConveyorItem extends BlockItem {
 
         BlockPos startPos = state.startPos;
         BlockPos selectedPos = resolvePlacementPos(context);
-        BlockState targetState = level.getBlockState(startPos);
-        boolean blockedStart = !targetState.canBeReplaced();
+        boolean blockedStart = !canPlaceBeltStart(level, startPos);
 
         Direction startFacing = state.resolveStartFacing(level, selectedPos, player.getDirection());
         Direction endFacing = resolveEndFacing(level, startPos, selectedPos, player.getDirection());
@@ -190,7 +189,14 @@ public class ConveyorItem extends BlockItem {
         return clickedPos.relative(placeContext.getClickedFace());
     }
 
-    private static boolean hasContainerInventory(Level level, BlockPos pos, Direction face) {
+    public static boolean canPlaceBeltStart(Level level, BlockPos pos) {
+        return level.getBlockState(pos).canBeReplaced();
+    }
+
+    public static boolean isContainerInputFace(Level level, BlockPos pos, Direction face) {
+        if (!face.getAxis().isHorizontal()) {
+            return false;
+        }
         BlockEntity entity = level.getBlockEntity(pos);
         if (entity == null || entity instanceof ConveyorBlockEntity
                 || entity instanceof SplitterBlockEntity || entity instanceof MergerBlockEntity) {

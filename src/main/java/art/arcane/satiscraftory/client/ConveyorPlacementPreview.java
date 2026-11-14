@@ -15,9 +15,12 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
@@ -32,6 +35,7 @@ import org.lwjgl.glfw.GLFW;
 public final class ConveyorPlacementPreview {
     private static final float RAIL_OFFSET = 0.16F;
     private static final double BELT_Y_OFFSET = 0.11D;
+    private static final double FACE_OUTSET = 0.003D;
     private static PreviewKey previewKey;
     private static BeltRoute previewRoute;
 
@@ -49,6 +53,11 @@ public final class ConveyorPlacementPreview {
         ClientLevel level = minecraft.level;
         if (player == null || level == null || !ConveyorItem.isHoldingBelt(player)) {
             return;
+        }
+
+        if (player.isShiftKeyDown() && minecraft.hitResult instanceof BlockHitResult target
+                && target.getType() == HitResult.Type.BLOCK) {
+            renderContainerFace(event, minecraft, level, player, target);
         }
 
         ConveyorItem.PlacementState placement = ConveyorItem.getActivePlacement(player, level);
@@ -94,11 +103,58 @@ public final class ConveyorPlacementPreview {
                 drawLine(lineBuffer, pose, normal, from.add(fromSide), to.add(toSide), 220, 40, 40, 220);
                 drawLine(lineBuffer, pose, normal, from.subtract(fromSide), to.subtract(toSide), 220, 40, 40, 220);
             } else {
-                drawLine(lineBuffer, pose, normal, from, to, 45, 240, 255, 255);
+                drawPreviewLine(lineBuffer, pose, normal, from, to);
                 drawLine(lineBuffer, pose, normal, from.add(fromSide), to.add(toSide), 20, 170, 185, 210);
                 drawLine(lineBuffer, pose, normal, from.subtract(fromSide), to.subtract(toSide), 20, 170, 185, 210);
             }
         }
+
+        buffer.endBatch(RenderType.lines());
+        poseStack.popPose();
+    }
+
+    private static void renderContainerFace(RenderLevelStageEvent event, Minecraft minecraft, ClientLevel level,
+                                            LocalPlayer player, BlockHitResult target) {
+        BlockPos pos = target.getBlockPos();
+        Direction face = target.getDirection();
+        if (!ConveyorItem.isContainerInputFace(level, pos, face)
+                || !ConveyorItem.canPlaceBeltStart(level, pos.relative(face))) {
+            return;
+        }
+
+        VoxelShape shape = level.getBlockState(pos).getShape(level, pos, CollisionContext.of(player));
+        if (shape.isEmpty()) {
+            return;
+        }
+        AABB bounds = shape.bounds();
+        double minX = bounds.minX;
+        double maxX = bounds.maxX;
+        double minZ = bounds.minZ;
+        double maxZ = bounds.maxZ;
+        if (face.getAxis() == Direction.Axis.X) {
+            minX = maxX = face == Direction.EAST ? maxX + FACE_OUTSET : minX - FACE_OUTSET;
+        } else {
+            minZ = maxZ = face == Direction.SOUTH ? maxZ + FACE_OUTSET : minZ - FACE_OUTSET;
+        }
+
+        Vec3 lowerLeft = new Vec3(minX, bounds.minY, minZ);
+        Vec3 lowerRight = new Vec3(maxX, bounds.minY, maxZ);
+        Vec3 upperRight = new Vec3(maxX, bounds.maxY, maxZ);
+        Vec3 upperLeft = new Vec3(minX, bounds.maxY, minZ);
+
+        Vec3 camera = event.getCamera().getPosition();
+        PoseStack poseStack = event.getPoseStack();
+        poseStack.pushPose();
+        poseStack.translate(pos.getX() - camera.x, pos.getY() - camera.y, pos.getZ() - camera.z);
+
+        MultiBufferSource.BufferSource buffer = minecraft.renderBuffers().bufferSource();
+        VertexConsumer lines = buffer.getBuffer(RenderType.lines());
+        Matrix4f pose = poseStack.last().pose();
+        Matrix3f normal = poseStack.last().normal();
+        drawPreviewLine(lines, pose, normal, lowerLeft, lowerRight);
+        drawPreviewLine(lines, pose, normal, lowerRight, upperRight);
+        drawPreviewLine(lines, pose, normal, upperRight, upperLeft);
+        drawPreviewLine(lines, pose, normal, upperLeft, lowerLeft);
 
         buffer.endBatch(RenderType.lines());
         poseStack.popPose();
@@ -131,6 +187,10 @@ public final class ConveyorPlacementPreview {
         if (minecraft.options.keyPlayerList.matches(event.getKey(), event.getScanCode())) {
             minecraft.options.keyPlayerList.setDown(false);
         }
+    }
+
+    private static void drawPreviewLine(VertexConsumer lines, Matrix4f pose, Matrix3f normal, Vec3 from, Vec3 to) {
+        drawLine(lines, pose, normal, from, to, 45, 240, 255, 255);
     }
 
     private static void drawLine(VertexConsumer consumer,
