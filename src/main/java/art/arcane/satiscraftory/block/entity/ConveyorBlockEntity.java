@@ -353,15 +353,31 @@ public class ConveyorBlockEntity extends BlockEntity {
         return super.getCapability(cap, side);
     }
 
-    public void dropContents(Level level, BlockPos pos) {
+    public void dropContents(Level level) {
+        if (level.isClientSide) {
+            return;
+        }
+        List<PredictedQueueItem> queue = snapshotRenderQueue();
+        if (queue.isEmpty()) {
+            return;
+        }
+
+        // Sample the live queue without projecting transfers beyond the current partial step.
+        double partialProgress = stepAccumulator - Math.floor(stepAccumulator);
+        List<PredictedRenderItem> drops = interpolateRenderItems(queue, getOutputContainerHandler(),
+                getDirectOutputConveyor() != null, partialProgress);
+
         for (int slot = 0; slot < bufferSlots; slot++) {
-            ItemStack stack = inventory.getStackInSlot(slot);
-            if (!stack.isEmpty()) {
-                Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), stack);
-                inventory.setStackInSlot(slot, ItemStack.EMPTY);
-                renderPositions[slot] = -1;
-                itemIds[slot] = 0L;
-            }
+            inventory.setStackInSlot(slot, ItemStack.EMPTY);
+            renderPositions[slot] = -1;
+            itemIds[slot] = 0L;
+        }
+        for (PredictedRenderItem drop : drops) {
+            Vec3 position = computeVisualPositionForSlotUnits(drop.slotUnits);
+            ItemEntity entity = new ItemEntity(level, position.x, position.y, position.z, drop.stack,
+                    0.0D, 0.0D, 0.0D);
+            entity.setDefaultPickUpDelay();
+            level.addFreshEntity(entity);
         }
     }
 
@@ -416,13 +432,13 @@ public class ConveyorBlockEntity extends BlockEntity {
         long elapsedTicks = Math.max(0L, now - clientSnapshotGameTime);
         ConveyorBlockEntity nextBelt = getDirectOutputConveyor();
         ConveyorBlockEntity previousBelt = getDirectInputConveyor();
-        ClientRenderPrediction prediction = predictClientRenderState(elapsedTicks, nextBelt != null);
+        List<PredictedRenderItem> prediction = predictClientRenderItems(elapsedTicks, nextBelt != null);
         double slotsPerTick = getStepsPerTick();
         double maxCorrection = Math.max(MIN_CLIENT_CORRECTION_SLOTS_PER_TICK,
                 slotsPerTick * CLIENT_CORRECTION_SPEED_FRACTION);
 
         Set<Long> activeVisualKeys = new HashSet<>();
-        for (ClientPredictedRenderItem item : prediction.items()) {
+        for (PredictedRenderItem item : prediction) {
             if (item.stack.isEmpty()) {
                 continue;
             }
@@ -434,8 +450,8 @@ public class ConveyorBlockEntity extends BlockEntity {
         finishDepartingVisuals(activeVisualKeys, nextBelt != null, now, slotsPerTick, maxCorrection);
     }
 
-    private ClientRenderPrediction predictClientRenderState(long elapsedTicks, boolean directOutput) {
-        List<ClientPredictedQueueItem> queue = new ArrayList<>();
+    private List<PredictedQueueItem> snapshotRenderQueue() {
+        List<PredictedQueueItem> queue = new ArrayList<>();
         for (int slot = 0; slot < bufferSlots; slot++) {
             ItemStack stack = inventory.getStackInSlot(slot);
             if (stack.isEmpty()) {
@@ -447,11 +463,15 @@ public class ConveyorBlockEntity extends BlockEntity {
             if (basePosition < 0) {
                 basePosition = 0;
             }
-            queue.add(new ClientPredictedQueueItem(visualKey, stack.copy(), basePosition));
+            queue.add(new PredictedQueueItem(visualKey, stack.copy(), basePosition));
         }
+        return queue;
+    }
 
+    private List<PredictedRenderItem> predictClientRenderItems(long elapsedTicks, boolean directOutput) {
+        List<PredictedQueueItem> queue = snapshotRenderQueue();
         if (queue.isEmpty()) {
-            return new ClientRenderPrediction(List.of());
+            return List.of();
         }
 
         double projectedAccumulator = Math.max(0.0D, stepAccumulator + (elapsedTicks * getStepsPerTick()));
@@ -463,41 +483,47 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         IItemHandler predictedOutput = getOutputContainerHandler();
         for (int step = 0; step < simulatedWholeSteps; step++) {
-            simulateClientSubStep(queue, predictedOutput, directOutput);
+            simulateRenderSubStep(queue, predictedOutput, directOutput);
         }
 
-        List<ClientPredictedQueueItem> previewQueue = copyClientQueue(queue);
-        simulateClientSubStep(previewQueue, predictedOutput, directOutput);
+        return interpolateRenderItems(queue, predictedOutput, directOutput, partialProgress);
+    }
+
+    private List<PredictedRenderItem> interpolateRenderItems(List<PredictedQueueItem> queue,
+                                                            @Nullable IItemHandler predictedOutput,
+                                                            boolean directOutput, double partialProgress) {
+        List<PredictedQueueItem> previewQueue = copyRenderQueue(queue);
+        simulateRenderSubStep(previewQueue, predictedOutput, directOutput);
 
         Map<Long, Integer> nextPositionsByKey = new HashMap<>();
-        for (ClientPredictedQueueItem previewItem : previewQueue) {
+        for (PredictedQueueItem previewItem : previewQueue) {
             nextPositionsByKey.put(previewItem.visualKey, previewItem.position);
         }
 
-        List<ClientPredictedRenderItem> renderedItems = new ArrayList<>(queue.size());
-        for (ClientPredictedQueueItem item : queue) {
+        List<PredictedRenderItem> renderedItems = new ArrayList<>(queue.size());
+        for (PredictedQueueItem item : queue) {
             // The first slot starts on the input edge. A departing head advances to the output edge.
             int nextPosition = nextPositionsByKey.getOrDefault(item.visualKey, bufferSlots);
             double slotUnits = Mth.lerp(partialProgress, item.position, nextPosition);
-            renderedItems.add(new ClientPredictedRenderItem(item.visualKey, item.stack, slotUnits));
+            renderedItems.add(new PredictedRenderItem(item.visualKey, item.stack, slotUnits));
         }
 
-        return new ClientRenderPrediction(renderedItems);
+        return renderedItems;
     }
 
-    private void simulateClientSubStep(List<ClientPredictedQueueItem> queue, @Nullable IItemHandler predictedOutput,
+    private void simulateRenderSubStep(List<PredictedQueueItem> queue, @Nullable IItemHandler predictedOutput,
                                        boolean directOutput) {
-        tryClientTransferHead(queue, predictedOutput, directOutput);
-        advanceClientQueueOneStep(queue);
+        predictHeadTransfer(queue, predictedOutput, directOutput);
+        advanceRenderQueue(queue);
     }
 
-    private void tryClientTransferHead(List<ClientPredictedQueueItem> queue, @Nullable IItemHandler predictedOutput,
-                                       boolean directOutput) {
+    private void predictHeadTransfer(List<PredictedQueueItem> queue, @Nullable IItemHandler predictedOutput,
+                                     boolean directOutput) {
         if (queue.isEmpty()) {
             return;
         }
 
-        ClientPredictedQueueItem head = queue.get(0);
+        PredictedQueueItem head = queue.get(0);
         if (head.position != bufferSlots - 1) {
             return;
         }
@@ -513,13 +539,13 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
     }
 
-    private void advanceClientQueueOneStep(List<ClientPredictedQueueItem> queue) {
+    private void advanceRenderQueue(List<PredictedQueueItem> queue) {
         if (queue.isEmpty()) {
             return;
         }
 
         boolean[] taken = new boolean[bufferSlots];
-        for (ClientPredictedQueueItem item : queue) {
+        for (PredictedQueueItem item : queue) {
             if (item.position == bufferSlots) {
                 continue;
             }
@@ -548,10 +574,10 @@ public class ConveyorBlockEntity extends BlockEntity {
         return insertIntoHandler(predictedOutput, single, true).isEmpty();
     }
 
-    private static List<ClientPredictedQueueItem> copyClientQueue(List<ClientPredictedQueueItem> source) {
-        List<ClientPredictedQueueItem> copy = new ArrayList<>(source.size());
-        for (ClientPredictedQueueItem item : source) {
-            copy.add(new ClientPredictedQueueItem(item.visualKey, item.stack, item.position));
+    private static List<PredictedQueueItem> copyRenderQueue(List<PredictedQueueItem> source) {
+        List<PredictedQueueItem> copy = new ArrayList<>(source.size());
+        for (PredictedQueueItem item : source) {
+            copy.add(new PredictedQueueItem(item.visualKey, item.stack, item.position));
         }
         return copy;
     }
@@ -1407,7 +1433,7 @@ public class ConveyorBlockEntity extends BlockEntity {
                 || entity.distanceToSqr(endPoint.x, endPoint.y, endPoint.z) <= maxDistanceSqr;
     }
 
-    private void updateClientVisual(ClientPredictedRenderItem item, @Nullable ConveyorBlockEntity previousBelt,
+    private void updateClientVisual(PredictedRenderItem item, @Nullable ConveyorBlockEntity previousBelt,
                                     @Nullable ConveyorBlockEntity nextBelt, long now,
                                     double slotsPerTick, double maxCorrection) {
         SplineVisualItemEntity downstream = nextBelt == null ? null : nextBelt.clientVisualItems.get(item.visualKey);
@@ -1647,36 +1673,24 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
     }
 
-    private static final class ClientRenderPrediction {
-        private final List<ClientPredictedRenderItem> items;
-
-        private ClientRenderPrediction(List<ClientPredictedRenderItem> items) {
-            this.items = items;
-        }
-
-        private List<ClientPredictedRenderItem> items() {
-            return items;
-        }
-    }
-
-    private static final class ClientPredictedQueueItem {
+    private static final class PredictedQueueItem {
         private final long visualKey;
         private final ItemStack stack;
         private int position;
 
-        private ClientPredictedQueueItem(long visualKey, ItemStack stack, int position) {
+        private PredictedQueueItem(long visualKey, ItemStack stack, int position) {
             this.visualKey = visualKey;
             this.stack = stack;
             this.position = position;
         }
     }
 
-    private static final class ClientPredictedRenderItem {
+    private static final class PredictedRenderItem {
         private final long visualKey;
         private final ItemStack stack;
         private final double slotUnits;
 
-        private ClientPredictedRenderItem(long visualKey, ItemStack stack, double slotUnits) {
+        private PredictedRenderItem(long visualKey, ItemStack stack, double slotUnits) {
             this.visualKey = visualKey;
             this.stack = stack;
             this.slotUnits = slotUnits;

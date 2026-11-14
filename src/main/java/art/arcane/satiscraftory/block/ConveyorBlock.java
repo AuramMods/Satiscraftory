@@ -93,7 +93,7 @@ public class ConveyorBlock extends BaseEntityBlock {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof ConveyorBlockEntity splineEntity) {
                 splineEntity.removeLinkedEndMarker();
-                splineEntity.dropContents(level, pos);
+                splineEntity.dropContents(level);
             }
             super.onRemove(state, level, pos, newState, isMoving);
         }

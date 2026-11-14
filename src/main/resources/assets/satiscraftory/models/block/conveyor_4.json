@@ -3,6 +3,7 @@
 	"credit": "Made with Blockbench",
 	"parent": "minecraft:block/block",
 	"textures": {
+		"particle": "#x",
 		"x": "satiscraftory:block/conveyor_4"
 	},
 	"elements": [
