@@ -66,6 +66,7 @@ public class ConveyorBlockEntity extends BlockEntity {
     private static final String TRAVEL_TICKS_PER_BLOCK_TAG = "travel_ticks_per_block";
     private static final String SYNC_REVISION_TAG = "sync_revision";
     private static final String DIRECT_INPUT_TAG = "direct_input";
+    private static final String BLOCKED_OUTPUT_ITEM_TAG = "blocked_output_item";
 
     private static long NEXT_ITEM_ID = 1L;
     private static long nextClientSnapshotOrder;
@@ -96,8 +97,9 @@ public class ConveyorBlockEntity extends BlockEntity {
     private long lastSyncPacketGameTime = Long.MIN_VALUE;
     private double stepAccumulator;
     private long syncRevision;
+    private long blockedOutputItemId;
     private boolean needsSync;
-    private boolean handoffSyncPending;
+    private boolean urgentSyncPending;
     private transient long nextEndMarkerValidationTick = Long.MIN_VALUE;
 
     private transient long lastClientAppliedRevision = Long.MIN_VALUE;
@@ -201,6 +203,9 @@ public class ConveyorBlockEntity extends BlockEntity {
         tag.putDouble(STEP_ACCUMULATOR_TAG, stepAccumulator);
         tag.putInt(TRAVEL_TICKS_PER_BLOCK_TAG, travelTicksPerBlock);
         tag.putLong(SYNC_REVISION_TAG, syncRevision);
+        if (blockedOutputItemId != 0L) {
+            tag.putLong(BLOCKED_OUTPUT_ITEM_TAG, blockedOutputItemId);
+        }
         if (directInputPos != null) {
             tag.put(DIRECT_INPUT_TAG, NbtUtils.writeBlockPos(directInputPos));
         }
@@ -273,10 +278,11 @@ public class ConveyorBlockEntity extends BlockEntity {
                 ? Math.max(1, tag.getInt(TRAVEL_TICKS_PER_BLOCK_TAG))
                 : resolveTravelTicksPerBlock(getBlockState());
         syncRevision = Math.max(0L, incomingRevision);
+        blockedOutputItemId = tag.getLong(BLOCKED_OUTPUT_ITEM_TAG);
         lastAccumulatorTick = Long.MIN_VALUE;
         lastSyncPacketGameTime = Long.MIN_VALUE;
         needsSync = false;
-        handoffSyncPending = false;
+        urgentSyncPending = false;
         directInputPos = tag.contains(DIRECT_INPUT_TAG, Tag.TAG_COMPOUND)
                 ? NbtUtils.readBlockPos(tag.getCompound(DIRECT_INPUT_TAG)) : null;
         nextEndMarkerValidationTick = Long.MIN_VALUE;
@@ -364,8 +370,7 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         // Sample the live queue without projecting transfers beyond the current partial step.
         double partialProgress = stepAccumulator - Math.floor(stepAccumulator);
-        List<PredictedRenderItem> drops = interpolateRenderItems(queue, getOutputContainerHandler(),
-                getDirectOutputConveyor() != null, partialProgress);
+        List<PredictedRenderItem> drops = interpolateRenderItems(queue, getOutputContainerHandler(), partialProgress);
 
         for (int slot = 0; slot < bufferSlots; slot++) {
             inventory.setStackInSlot(slot, ItemStack.EMPTY);
@@ -400,17 +405,21 @@ public class ConveyorBlockEntity extends BlockEntity {
             normalizeInventory(true);
         }
 
+        boolean firstTick = lastAccumulatorTick == Long.MIN_VALUE;
         updateStepAccumulator(level.getGameTime());
         int stepBudget = availableStepBudget();
         for (int i = 0; i < stepBudget; i++) {
             runSubStep(level);
             consumeOneStepBudget();
         }
+        if (firstTick || stepBudget > 0) {
+            refreshOutputBackpressure();
+        }
 
         if (needsSync && syncDirtyItems()) {
             needsSync = false;
         }
-        handoffSyncPending = false;
+        urgentSyncPending = false;
     }
 
     private void tickClient(Level level, BlockPos pos, BlockState state) {
@@ -432,7 +441,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         long elapsedTicks = Math.max(0L, now - clientSnapshotGameTime);
         ConveyorBlockEntity nextBelt = getDirectOutputConveyor();
         ConveyorBlockEntity previousBelt = getDirectInputConveyor();
-        List<PredictedRenderItem> prediction = predictClientRenderItems(elapsedTicks, nextBelt != null);
+        List<PredictedRenderItem> prediction = predictClientRenderItems(elapsedTicks);
         double slotsPerTick = getStepsPerTick();
         double maxCorrection = Math.max(MIN_CLIENT_CORRECTION_SLOTS_PER_TICK,
                 slotsPerTick * CLIENT_CORRECTION_SPEED_FRACTION);
@@ -468,7 +477,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         return queue;
     }
 
-    private List<PredictedRenderItem> predictClientRenderItems(long elapsedTicks, boolean directOutput) {
+    private List<PredictedRenderItem> predictClientRenderItems(long elapsedTicks) {
         List<PredictedQueueItem> queue = snapshotRenderQueue();
         if (queue.isEmpty()) {
             return List.of();
@@ -483,67 +492,46 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         IItemHandler predictedOutput = getOutputContainerHandler();
         for (int step = 0; step < simulatedWholeSteps; step++) {
-            simulateRenderSubStep(queue, predictedOutput, directOutput);
+            if (!simulateRenderSubStep(queue, predictedOutput)) {
+                break;
+            }
         }
 
-        return interpolateRenderItems(queue, predictedOutput, directOutput, partialProgress);
+        return interpolateRenderItems(queue, predictedOutput, partialProgress);
     }
 
     private List<PredictedRenderItem> interpolateRenderItems(List<PredictedQueueItem> queue,
                                                             @Nullable IItemHandler predictedOutput,
-                                                            boolean directOutput, double partialProgress) {
+                                                            double partialProgress) {
         List<PredictedQueueItem> previewQueue = copyRenderQueue(queue);
-        simulateRenderSubStep(previewQueue, predictedOutput, directOutput);
-
-        Map<Long, Integer> nextPositionsByKey = new HashMap<>();
-        for (PredictedQueueItem previewItem : previewQueue) {
-            nextPositionsByKey.put(previewItem.visualKey, previewItem.position);
-        }
+        simulateRenderSubStep(previewQueue, predictedOutput);
 
         List<PredictedRenderItem> renderedItems = new ArrayList<>(queue.size());
-        for (PredictedQueueItem item : queue) {
+        for (int i = 0; i < queue.size(); i++) {
+            PredictedQueueItem item = queue.get(i);
             // The first slot starts on the input edge. A departing head advances to the output edge.
-            int nextPosition = nextPositionsByKey.getOrDefault(item.visualKey, bufferSlots);
-            double slotUnits = Mth.lerp(partialProgress, item.position, nextPosition);
+            double slotUnits = Mth.lerp(partialProgress, item.position, previewQueue.get(i).position);
             renderedItems.add(new PredictedRenderItem(item.visualKey, item.stack, slotUnits));
         }
 
         return renderedItems;
     }
 
-    private void simulateRenderSubStep(List<PredictedQueueItem> queue, @Nullable IItemHandler predictedOutput,
-                                       boolean directOutput) {
-        predictHeadTransfer(queue, predictedOutput, directOutput);
-        advanceRenderQueue(queue);
-    }
-
-    private void predictHeadTransfer(List<PredictedQueueItem> queue, @Nullable IItemHandler predictedOutput,
-                                     boolean directOutput) {
-        if (queue.isEmpty()) {
-            return;
-        }
-
+    private boolean simulateRenderSubStep(List<PredictedQueueItem> queue, @Nullable IItemHandler predictedOutput) {
         PredictedQueueItem head = queue.get(0);
-        if (head.position != bufferSlots - 1) {
-            return;
-        }
-        if (!canLikelyTransferHead(predictedOutput, head.stack)) {
-            return;
+        boolean reachedEdge = head.position == bufferSlots - 1 && head.visualKey != blockedOutputItemId
+                && canInsertHead(predictedOutput, head.stack);
+        if (reachedEdge) {
+            // A receiving inventory on the client can look empty even when the server sees a jam.
+            // Hold the same item at the edge until a server snapshot confirms its departure.
+            head.position = bufferSlots;
         }
 
-        if (directOutput) {
-            // Keep the visual on the seam until the next belt actually receives this item ID.
-            head.position = bufferSlots;
-        } else {
-            queue.remove(0);
-        }
+        return advanceRenderQueue(queue) || reachedEdge;
     }
 
-    private void advanceRenderQueue(List<PredictedQueueItem> queue) {
-        if (queue.isEmpty()) {
-            return;
-        }
-
+    private boolean advanceRenderQueue(List<PredictedQueueItem> queue) {
+        boolean moved = false;
         boolean[] taken = new boolean[bufferSlots];
         for (PredictedQueueItem item : queue) {
             if (item.position == bufferSlots) {
@@ -560,18 +548,20 @@ public class ConveyorBlockEntity extends BlockEntity {
             if (next >= 0 && next < taken.length) {
                 taken[next] = true;
             }
+            moved |= item.position != next;
             item.position = next;
         }
+        return moved;
     }
 
-    private boolean canLikelyTransferHead(@Nullable IItemHandler predictedOutput, ItemStack stack) {
-        if (predictedOutput == null || stack.isEmpty()) {
+    private boolean canInsertHead(@Nullable IItemHandler output, ItemStack stack) {
+        if (output == null || stack.isEmpty()) {
             return false;
         }
 
         ItemStack single = stack.copy();
         single.setCount(1);
-        return insertIntoHandler(predictedOutput, single, true).isEmpty();
+        return insertIntoHandler(output, single, true).isEmpty();
     }
 
     private static List<PredictedQueueItem> copyRenderQueue(List<PredictedQueueItem> source) {
@@ -590,6 +580,18 @@ public class ConveyorBlockEntity extends BlockEntity {
         tryTransferToOutput(level);
         advanceItemsOneStep();
         pullFromInputContainer();
+    }
+
+    private void refreshOutputBackpressure() {
+        long blocked = 0L;
+        if (hasHeadAtOutput() && !canInsertHead(getOutputContainerHandler(), inventory.getStackInSlot(0))) {
+            blocked = itemIds[0];
+        }
+        if (blocked != blockedOutputItemId) {
+            blockedOutputItemId = blocked;
+            urgentSyncPending = true;
+            markDirtyForSync();
+        }
     }
 
     private boolean tryTransferToOutput(Level level) {
@@ -706,8 +708,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         target.appendItem(slot, transfer.stack, transfer.itemId);
         target.directInputPos = worldPosition;
         // Let both belts publish their completed tick without waiting for the regular snapshot interval.
-        handoffSyncPending = true;
-        target.handoffSyncPending = true;
+        target.urgentSyncPending = true;
         return true;
     }
 
@@ -1027,6 +1028,8 @@ public class ConveyorBlockEntity extends BlockEntity {
         renderPositions[0] = -1;
         itemIds[0] = 0L;
         compactQueue();
+        blockedOutputItemId = 0L;
+        urgentSyncPending = true;
         markDirtyForSync();
 
         return new HeadTransfer(single, itemId);
@@ -1345,7 +1348,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
 
         long now = level.getGameTime();
-        if (!handoffSyncPending && lastSyncPacketGameTime != Long.MIN_VALUE
+        if (!urgentSyncPending && lastSyncPacketGameTime != Long.MIN_VALUE
                 && now - lastSyncPacketGameTime < getClientSyncIntervalTicks()) {
             return false;
         }
@@ -1770,7 +1773,8 @@ public class ConveyorBlockEntity extends BlockEntity {
                         : -previousSlotUnits + slotsPerTick * (1.0D - timeToEdge);
             }
 
-            slotUnits = previousSlotUnits + clamp(target - previousSlotUnits, -maxCorrection, forward + maxCorrection);
+            // A correction can make an item wait for the queue to catch up. Belts never run in reverse.
+            slotUnits = previousSlotUnits + clamp(target - previousSlotUnits, 0.0D, forward + maxCorrection);
             Vec3 position = positionOnBelt(1.0F);
             setPos(position.x, position.y, position.z);
         }
