@@ -58,7 +58,7 @@ public final class ConveyorPlacementPreview {
         BlockPos startPos = placement.startPos();
 
         HitResult hit = player.pick(32.0D, event.getPartialTick(), false);
-        if (!(hit instanceof BlockHitResult blockHit)) {
+        if (!(hit instanceof BlockHitResult blockHit) || blockHit.getType() != HitResult.Type.BLOCK) {
             return;
         }
 
