@@ -45,10 +45,11 @@ public final class ConveyorPlacementPreview {
             return;
         }
 
-        BlockPos startPos = ConveyorItem.getStoredStartPos(player, level);
-        if (startPos == null) {
+        ConveyorItem.PlacementState placement = ConveyorItem.getActivePlacement(player, level);
+        if (placement == null) {
             return;
         }
+        BlockPos startPos = placement.startPos();
 
         HitResult hit = player.pick(32.0D, event.getPartialTick(), false);
         if (!(hit instanceof BlockHitResult blockHit)) {
@@ -56,7 +57,7 @@ public final class ConveyorPlacementPreview {
         }
 
         BlockPos previewEndPos = ConveyorItem.resolvePreviewEndPos(level, blockHit.getBlockPos(), blockHit.getDirection());
-        Direction startFacing = ConveyorItem.resolveStartFacing(level, startPos, previewEndPos, player.getDirection());
+        Direction startFacing = placement.resolveStartFacing(level, previewEndPos, player.getDirection());
         Direction endFacing = ConveyorItem.resolveEndFacing(level, startPos, previewEndPos, player.getDirection());
         int estimatedLength = ConveyorItem.estimateSplineLengthBlocks(startPos, startFacing, previewEndPos, endFacing);
         boolean overMaxLength = estimatedLength > ConveyorItem.MAX_SPLINE_LENGTH_BLOCKS;

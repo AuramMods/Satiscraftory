@@ -4,6 +4,8 @@ import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.ConveyorConnectable;
 import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
+import art.arcane.satiscraftory.block.entity.MergerBlockEntity;
+import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -33,6 +35,7 @@ import javax.annotation.Nullable;
 public class ConveyorItem extends BlockItem {
     private static final String PLACEMENT_STATE_TAG = "satiscraftory_spline_experiment_state";
     private static final String START_POS_TAG = "start_pos";
+    private static final String START_FACING_TAG = "start_facing";
     private static final String START_DIMENSION_TAG = "start_dimension";
     public static final int MAX_SPLINE_LENGTH_BLOCKS = 16;
     private static final int LENGTH_SAMPLE_SEGMENTS = 80;
@@ -45,7 +48,7 @@ public class ConveyorItem extends BlockItem {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
-        if (getStoredStartPos(player, level) == null) {
+        if (getActivePlacement(player, level) == null) {
             return InteractionResultHolder.pass(stack);
         }
 
@@ -64,13 +67,33 @@ public class ConveyorItem extends BlockItem {
         }
 
         Level level = context.getLevel();
-        BlockPos selectedPos = resolvePlacementPos(context);
         PlacementState state = readPlacementState(player);
 
         if (state == null) {
-            storePlacementState(player, selectedPos, level.dimension().location().toString());
+            BlockPos startPos;
+            Direction startFacing = null;
+            if (player.isShiftKeyDown()) {
+                Direction face = context.getClickedFace();
+                BlockPos containerPos = context.getClickedPos();
+                if (!face.getAxis().isHorizontal() || !hasContainerInventory(level, containerPos, face)) {
+                    return InteractionResult.PASS;
+                }
+
+                startPos = containerPos.relative(face);
+                if (!level.getBlockState(startPos).canBeReplaced()) {
+                    if (!level.isClientSide) {
+                        player.displayClientMessage(Component.literal("Spline start is blocked: " + formatPos(startPos)), true);
+                    }
+                    return InteractionResult.FAIL;
+                }
+                startFacing = face;
+            } else {
+                startPos = resolvePlacementPos(context);
+            }
+
+            storePlacementState(player, new PlacementState(startPos, level.dimension().location().toString(), startFacing));
             if (!level.isClientSide) {
-                player.displayClientMessage(Component.literal("Spline start set: " + formatPos(selectedPos)), true);
+                player.displayClientMessage(Component.literal("Spline start set: " + formatPos(startPos)), true);
             }
             return InteractionResult.sidedSuccess(level.isClientSide);
         }
@@ -84,10 +107,11 @@ public class ConveyorItem extends BlockItem {
         }
 
         BlockPos startPos = state.startPos;
+        BlockPos selectedPos = resolvePlacementPos(context);
         BlockState targetState = level.getBlockState(startPos);
         boolean blockedStart = !targetState.canBeReplaced();
 
-        Direction startFacing = resolveStartFacing(level, startPos, selectedPos, player.getDirection());
+        Direction startFacing = state.resolveStartFacing(level, selectedPos, player.getDirection());
         Direction endFacing = resolveEndFacing(level, startPos, selectedPos, player.getDirection());
         int estimatedLength = estimateSplineLengthBlocks(startPos, startFacing, selectedPos, endFacing);
         boolean overMaxLength = estimatedLength > MAX_SPLINE_LENGTH_BLOCKS;
@@ -163,6 +187,17 @@ public class ConveyorItem extends BlockItem {
         return clickedPos.relative(placeContext.getClickedFace());
     }
 
+    private static boolean hasContainerInventory(Level level, BlockPos pos, Direction face) {
+        BlockEntity entity = level.getBlockEntity(pos);
+        if (entity == null || entity instanceof ConveyorBlockEntity
+                || entity instanceof SplitterBlockEntity || entity instanceof MergerBlockEntity) {
+            return false;
+        }
+
+        return entity.getCapability(ForgeCapabilities.ITEM_HANDLER, face).isPresent()
+                || entity.getCapability(ForgeCapabilities.ITEM_HANDLER, null).isPresent();
+    }
+
     @Nullable
     private static PlacementState readPlacementState(Player player) {
         CompoundTag persistentData = player.getPersistentData();
@@ -178,13 +213,20 @@ public class ConveyorItem extends BlockItem {
 
         BlockPos startPos = NbtUtils.readBlockPos(placementData.getCompound(START_POS_TAG));
         String dimensionId = placementData.getString(START_DIMENSION_TAG);
-        return new PlacementState(startPos, dimensionId);
+        Direction startFacing = Direction.byName(placementData.getString(START_FACING_TAG));
+        if (startFacing != null && !startFacing.getAxis().isHorizontal()) {
+            startFacing = null;
+        }
+        return new PlacementState(startPos, dimensionId, startFacing);
     }
 
-    private static void storePlacementState(Player player, BlockPos startPos, String dimensionId) {
+    private static void storePlacementState(Player player, PlacementState state) {
         CompoundTag placementData = new CompoundTag();
-        placementData.put(START_POS_TAG, NbtUtils.writeBlockPos(startPos));
-        placementData.putString(START_DIMENSION_TAG, dimensionId);
+        placementData.put(START_POS_TAG, NbtUtils.writeBlockPos(state.startPos));
+        placementData.putString(START_DIMENSION_TAG, state.dimensionId);
+        if (state.startFacing != null) {
+            placementData.putString(START_FACING_TAG, state.startFacing.getName());
+        }
         player.getPersistentData().put(PLACEMENT_STATE_TAG, placementData);
     }
 
@@ -197,15 +239,12 @@ public class ConveyorItem extends BlockItem {
     }
 
     @Nullable
-    public static BlockPos getStoredStartPos(Player player, Level level) {
+    public static PlacementState getActivePlacement(Player player, Level level) {
         PlacementState state = readPlacementState(player);
-        if (state == null) {
+        if (state == null || !state.dimensionId.equals(level.dimension().location().toString())) {
             return null;
         }
-        if (!state.dimensionId.equals(level.dimension().location().toString())) {
-            return null;
-        }
-        return state.startPos;
+        return state;
     }
 
     public static BlockPos resolvePreviewEndPos(Level level, BlockPos clickedPos, Direction clickedFace) {
@@ -383,6 +422,9 @@ public class ConveyorItem extends BlockItem {
         return new Vec3(0.0D, 0.0D, -1.0D);
     }
 
-    private record PlacementState(BlockPos startPos, String dimensionId) {
+    public record PlacementState(BlockPos startPos, String dimensionId, @Nullable Direction startFacing) {
+        public Direction resolveStartFacing(Level level, BlockPos endPos, Direction fallback) {
+            return startFacing != null ? startFacing : ConveyorItem.resolveStartFacing(level, startPos, endPos, fallback);
+        }
     }
 }
