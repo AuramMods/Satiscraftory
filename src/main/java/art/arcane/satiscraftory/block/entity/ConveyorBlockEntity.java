@@ -46,6 +46,8 @@ public class ConveyorBlockEntity extends BlockEntity {
     private static final int DEFAULT_TRAVEL_TICKS_PER_BLOCK = 60;
     private static final int LENGTH_SAMPLE_SEGMENTS = 80;
     private static final int MAX_CLIENT_PREDICTION_STEPS = 256;
+    private static final double MIN_CLIENT_CORRECTION_SLOTS_PER_TICK = 0.125D;
+    private static final double CLIENT_CORRECTION_SPEED_FRACTION = 0.25D;
     private static final double VISUAL_RANGE_BLOCKS = 16.0D;
     private static final double EDGE_OFFSET = 0.5D;
     private static final double ITEM_Y_OFFSET = 0.08D;
@@ -380,6 +382,9 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
         long elapsedTicks = Math.max(0L, now - clientSnapshotGameTime);
         ClientRenderPrediction prediction = predictClientRenderState(elapsedTicks);
+        double slotsPerTick = getStepsPerTick();
+        double maxCorrection = Math.max(MIN_CLIENT_CORRECTION_SLOTS_PER_TICK,
+                slotsPerTick * CLIENT_CORRECTION_SPEED_FRACTION);
 
         Set<Long> activeVisualKeys = new HashSet<>();
         for (ClientPredictedRenderItem item : prediction.items()) {
@@ -388,8 +393,7 @@ public class ConveyorBlockEntity extends BlockEntity {
             }
 
             activeVisualKeys.add(item.visualKey);
-            Vec3 visualPosition = computeVisualPositionForSlotUnits(item.slotUnits);
-            updateClientVisual(item.visualKey, item.stack, visualPosition);
+            updateClientVisual(item, slotsPerTick, maxCorrection);
         }
 
         removeStaleClientVisuals(activeVisualKeys);
@@ -1369,33 +1373,40 @@ public class ConveyorBlockEntity extends BlockEntity {
                 || entity.distanceToSqr(endPoint.x, endPoint.y, endPoint.z) <= maxDistanceSqr;
     }
 
-    private void updateClientVisual(long visualKey, ItemStack sourceStack, Vec3 position) {
+    private void updateClientVisual(ClientPredictedRenderItem item, double slotsPerTick, double maxCorrection) {
         if (level == null || !level.isClientSide) {
             return;
         }
 
-        ItemStack single = sourceStack.copy();
+        ItemStack single = item.stack.copy();
         single.setCount(1);
-        SplineVisualItemEntity visual = clientVisualItems.get(visualKey);
+        SplineVisualItemEntity visual = clientVisualItems.get(item.visualKey);
         if (visual == null || !visual.isAlive()) {
-            SplineVisualItemEntity created = new SplineVisualItemEntity(level, position.x, position.y, position.z, single);
-            if (!spawnClientVisual(visualKey, created)) {
-                clientVisualItems.remove(visualKey);
+            Vec3 position = computeVisualPositionForSlotUnits(item.slotUnits);
+            SplineVisualItemEntity created = new SplineVisualItemEntity(level, position, single, item.slotUnits);
+            if (!spawnClientVisual(item.visualKey, created)) {
+                clientVisualItems.remove(item.visualKey);
                 return;
             }
             setVisualBobPhase(created, 0.0F);
-            visual = created;
-            clientVisualItems.put(visualKey, created);
+            clientVisualItems.put(item.visualKey, created);
+            return;
         }
+
         setVisualBobPhase(visual, 0.0F);
 
         if (!ItemStack.isSameItemSameTags(visual.getItem(), single)) {
             visual.setItem(single);
         }
 
+        // A fresh snapshot can shift the prediction. Recover the error over several ticks.
+        double delta = item.slotUnits - visual.slotUnits;
+        visual.slotUnits += clamp(delta, -maxCorrection, slotsPerTick + maxCorrection);
+        Vec3 position = computeVisualPositionForSlotUnits(visual.slotUnits);
+
+        // moveTo resets the previous position that the renderer needs for partial ticks.
         visual.setOldPosAndRot();
-        visual.moveTo(position.x, position.y, position.z, 0.0F, 0.0F);
-        visual.setDeltaMovement(Vec3.ZERO);
+        visual.setPos(position.x, position.y, position.z);
     }
 
     private void removeStaleClientVisuals(Set<Long> activeVisualKeys) {
@@ -1779,14 +1790,18 @@ public class ConveyorBlockEntity extends BlockEntity {
     }
 
     private static class SplineVisualItemEntity extends ItemEntity {
-        private SplineVisualItemEntity(Level level, double x, double y, double z, ItemStack stack) {
-            super(level, x, y, z, stack.copy());
+        private double slotUnits;
+
+        private SplineVisualItemEntity(Level level, Vec3 position, ItemStack stack, double slotUnits) {
+            super(level, position.x, position.y, position.z, stack.copy());
+            this.slotUnits = slotUnits;
             this.noPhysics = true;
             this.setNoGravity(true);
             this.setNeverPickUp();
             this.setPickUpDelay(32767);
             this.setInvulnerable(true);
             this.setDeltaMovement(Vec3.ZERO);
+            this.setYRot(0.0F);
             this.setOldPosAndRot();
         }
 
