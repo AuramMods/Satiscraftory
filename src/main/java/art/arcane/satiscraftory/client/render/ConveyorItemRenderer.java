@@ -44,15 +44,15 @@ public final class ConveyorItemRenderer extends EntityRenderer<SplineVisualItemE
         ItemTransform ground = model.getTransforms().getTransform(ItemDisplayContext.GROUND);
         Vector3f offset = ground.translation;
         float height = 0.1F + 0.25F * ground.scale.y();
-        Vec3 pivot = visual.positionOnBelt(partialTick).add(offset.x(), height + offset.y(), offset.z());
+        Vec3 pivot = visual.positionOnBelt(partialTick).add(0.0D, height + offset.y(), 0.0D);
         Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         visual.turnToward(camera.subtract(pivot), Util.getNanos());
 
         poseStack.pushPose();
-        poseStack.translate(offset.x(), height + offset.y(), offset.z());
+        poseStack.translate(0.0D, height + offset.y(), 0.0D);
         poseStack.mulPose(Axis.YP.rotationDegrees(visual.getFacingYaw()));
         poseStack.mulPose(Axis.XP.rotationDegrees(visual.getFacingPitch()));
-        // ItemRenderer applies the ground translation itself. Keep the pivot over the belt.
+        // Cancel the ground model's offset so its center tracks the belt edges.
         poseStack.translate(-offset.x(), -offset.y(), -offset.z());
         itemRenderer.render(stack, ItemDisplayContext.GROUND, false, poseStack, buffers,
                 packedLight, OverlayTexture.NO_OVERLAY, model);
