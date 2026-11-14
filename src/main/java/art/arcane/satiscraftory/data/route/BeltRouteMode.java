@@ -5,11 +5,10 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
-import java.util.List;
 
 public enum BeltRouteMode {
-    STRAIGHT("straight", "Straight", StraightRoute::points),
-    SPLINE("spline", "Spline", SplineRoute::points);
+    STRAIGHT("straight", "Straight", StraightRoute::build),
+    SPLINE("spline", "Spline", SplineRoute::build);
 
     public static final BeltRouteMode DEFAULT = STRAIGHT;
 
@@ -50,7 +49,7 @@ public enum BeltRouteMode {
         Vec3 startCenter = new Vec3(0.5D, 0.0D, 0.5D);
         Vec3 endCenter = startCenter.add((double) end.getX() - start.getX(),
                 (double) end.getY() - start.getY(), (double) end.getZ() - start.getZ());
-        return new BeltRoute(builder.points(startCenter, startFacing, endCenter, endFacing));
+        return builder.build(startCenter, startFacing, endCenter, endFacing);
     }
 
     static Vec3 forward(Direction direction) {
@@ -59,6 +58,6 @@ public enum BeltRouteMode {
 
     @FunctionalInterface
     private interface RouteBuilder {
-        List<Vec3> points(Vec3 start, Direction startFacing, Vec3 end, Direction endFacing);
+        BeltRoute build(Vec3 start, Direction startFacing, Vec3 end, Direction endFacing);
     }
 }

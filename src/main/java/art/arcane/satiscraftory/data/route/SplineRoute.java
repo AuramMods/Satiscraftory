@@ -12,7 +12,7 @@ final class SplineRoute {
     private SplineRoute() {
     }
 
-    static List<Vec3> points(Vec3 start, Direction startFacing, Vec3 end, Direction endFacing) {
+    static BeltRoute build(Vec3 start, Direction startFacing, Vec3 end, Direction endFacing) {
         Vec3 startForward = BeltRouteMode.forward(startFacing);
         Vec3 endForward = BeltRouteMode.forward(endFacing);
         Vec3 a = start.subtract(startForward.scale(0.5D));
@@ -33,6 +33,6 @@ final class SplineRoute {
                 points.add(point);
             }
         }
-        return points;
+        return new BeltRoute(points);
     }
 }

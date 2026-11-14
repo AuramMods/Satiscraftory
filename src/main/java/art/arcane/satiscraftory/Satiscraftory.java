@@ -9,6 +9,7 @@ import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity.SplineVisualIte
 import art.arcane.satiscraftory.block.entity.ConveyorEndBlockEntity;
 import art.arcane.satiscraftory.block.entity.MergerBlockEntity;
 import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
+import art.arcane.satiscraftory.config.BeltClientConfig;
 import art.arcane.satiscraftory.data.ConveyorTier;
 import art.arcane.satiscraftory.item.ConveyorItem;
 import art.arcane.satiscraftory.network.BeltPlacementNetwork;
@@ -28,6 +29,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.*;
 import org.slf4j.Logger;
@@ -122,6 +124,7 @@ public class Satiscraftory {
 
 
     public Satiscraftory(FMLJavaModLoadingContext context) {
+        context.registerConfig(ModConfig.Type.CLIENT, BeltClientConfig.SPEC);
         BeltPlacementNetwork.register();
         IEventBus modEventBus = context.getModEventBus();
         BLOCKS.register(modEventBus);

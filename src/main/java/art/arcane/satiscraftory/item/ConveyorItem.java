@@ -6,8 +6,10 @@ import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
 import art.arcane.satiscraftory.block.entity.MergerBlockEntity;
 import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
+import art.arcane.satiscraftory.config.BeltClientConfig;
 import art.arcane.satiscraftory.data.route.BeltRoute;
 import art.arcane.satiscraftory.data.route.BeltRouteMode;
+import art.arcane.satiscraftory.network.BeltPlacementNetwork;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -39,6 +41,7 @@ public class ConveyorItem extends BlockItem {
     private static final String START_FACING_TAG = "start_facing";
     private static final String START_DIMENSION_TAG = "start_dimension";
     private static final String ROUTE_MODE_TAG = "route_mode";
+    private static final String PREFERRED_ROUTE_MODE_TAG = "satiscraftory_preferred_route_mode";
     public static final int MAX_BELT_LENGTH_BLOCKS = 16;
 
     public ConveyorItem(Block block, Properties properties) {
@@ -91,7 +94,11 @@ public class ConveyorItem extends BlockItem {
                 startPos = resolvePlacementPos(context);
             }
 
-            BeltRouteMode mode = BeltRouteMode.DEFAULT;
+            BeltRouteMode mode = preferredMode(player);
+            if (level.isClientSide) {
+                // The item prediction runs before Minecraft sends its block interaction packet.
+                BeltPlacementNetwork.selectRouteMode(mode);
+            }
             storePlacementState(player, new PlacementState(startPos, level.dimension().location().toString(), startFacing, mode));
             if (!level.isClientSide) {
                 player.displayClientMessage(Component.literal("Belt start set: " + formatPos(startPos)
@@ -263,13 +270,20 @@ public class ConveyorItem extends BlockItem {
                 || player.getOffhandItem().getItem() instanceof ConveyorItem;
     }
 
-    public static boolean selectRouteMode(Player player, BeltRouteMode mode) {
-        PlacementState state = getActivePlacement(player, player.level());
-        if (state == null) {
-            return false;
+    private static BeltRouteMode preferredMode(Player player) {
+        if (player.level().isClientSide) {
+            return BeltClientConfig.preferredMode();
         }
-        storePlacementState(player, new PlacementState(state.startPos, state.dimensionId, state.startFacing, mode));
-        return true;
+        BeltRouteMode mode = BeltRouteMode.byId(player.getPersistentData().getString(PREFERRED_ROUTE_MODE_TAG));
+        return mode == null ? BeltRouteMode.DEFAULT : mode;
+    }
+
+    public static void selectRouteMode(Player player, BeltRouteMode mode) {
+        player.getPersistentData().putString(PREFERRED_ROUTE_MODE_TAG, mode.id());
+        PlacementState state = getActivePlacement(player, player.level());
+        if (state != null) {
+            storePlacementState(player, new PlacementState(state.startPos, state.dimensionId, state.startFacing, mode));
+        }
     }
 
     public static BlockPos resolvePreviewEndPos(Level level, BlockPos clickedPos, Direction clickedFace) {

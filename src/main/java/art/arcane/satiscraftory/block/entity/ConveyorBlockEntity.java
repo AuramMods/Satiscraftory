@@ -147,7 +147,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         this.endFacing = endFacing.getAxis().isHorizontal() ? endFacing : Direction.NORTH;
         routeMode = mode;
         route = null;
-        recalculateLengthAndResize(false);
+        recalculateLengthAndResize();
         nextEndMarkerValidationTick = Long.MIN_VALUE;
         if (level != null && !level.isClientSide) {
             updateLinkedEndMarker(previousEndPos);
@@ -282,7 +282,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         nextEndMarkerValidationTick = Long.MIN_VALUE;
 
         normalizeInventory(false);
-        recalculateLengthAndResize(false);
+        recalculateLengthAndResize();
         normalizeInventory(false);
 
         suppressDirtyCallbacks = false;
@@ -380,7 +380,7 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         validateLinkedEndMarker(level.getGameTime());
 
-        if (recalculateLengthAndResize(true)) {
+        if (recalculateLengthAndResize()) {
             normalizeInventory(true);
         }
 
@@ -818,7 +818,8 @@ public class ConveyorBlockEntity extends BlockEntity {
     }
 
     private int findFirstEmptySlot() {
-        for (int slot = 0; slot < bufferSlots; slot++) {
+        int capacity = Math.min(bufferSlots, desiredBufferSlots());
+        for (int slot = 0; slot < capacity; slot++) {
             if (inventory.getStackInSlot(slot).isEmpty()) {
                 return slot;
             }
@@ -1106,7 +1107,11 @@ public class ConveyorBlockEntity extends BlockEntity {
         return Math.min(bufferSlots - 1, position);
     }
 
-    private boolean recalculateLengthAndResize(boolean dropOverflow) {
+    private int desiredBufferSlots() {
+        return beltLengthBlocks * SLOTS_PER_BLOCK;
+    }
+
+    private boolean recalculateLengthAndResize() {
         int computedLength = endPos == null ? 1 : getRoute().lengthInBlocks();
 
         boolean changed = false;
@@ -1115,21 +1120,17 @@ public class ConveyorBlockEntity extends BlockEntity {
             changed = true;
         }
 
-        int desiredSlots = Math.max(1, beltLengthBlocks * SLOTS_PER_BLOCK);
-        if (desiredSlots != bufferSlots) {
-            resizeBuffer(desiredSlots, dropOverflow);
+        int desiredSlots = desiredBufferSlots();
+        // Rounded routes may be shorter in existing saves. Drain the old slots before shrinking.
+        if (desiredSlots > bufferSlots || (desiredSlots < bufferSlots && countNonEmptySlots() <= desiredSlots)) {
+            resizeBuffer(desiredSlots);
             changed = true;
         }
 
         return changed;
     }
 
-    private void resizeBuffer(int desiredSlots, boolean dropOverflow) {
-        desiredSlots = Math.max(1, desiredSlots);
-        if (desiredSlots == bufferSlots) {
-            return;
-        }
-
+    private void resizeBuffer(int desiredSlots) {
         List<BufferedItem> items = new ArrayList<>();
         int oldSlots = Math.max(1, bufferSlots);
         for (int slot = 0; slot < bufferSlots; slot++) {
@@ -1155,17 +1156,6 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         int write = 0;
         for (BufferedItem item : items) {
-            if (write >= bufferSlots) {
-                if (dropOverflow && level != null && !level.isClientSide) {
-                    Containers.dropItemStack(level,
-                            worldPosition.getX() + 0.5D,
-                            worldPosition.getY() + 0.5D,
-                            worldPosition.getZ() + 0.5D,
-                            item.stack.copy());
-                }
-                continue;
-            }
-
             inventory.setStackInSlot(write, item.stack.copy());
             itemIds[write] = item.itemId;
             int mapped = clamp((int) Math.floor(item.progress * bufferSlots), 0, bufferSlots - 1);

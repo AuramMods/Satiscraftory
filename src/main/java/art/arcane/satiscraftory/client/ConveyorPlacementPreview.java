@@ -1,6 +1,7 @@
 package art.arcane.satiscraftory.client;
 
 import art.arcane.satiscraftory.Satiscraftory;
+import art.arcane.satiscraftory.config.BeltClientConfig;
 import art.arcane.satiscraftory.data.route.BeltRoute;
 import art.arcane.satiscraftory.data.route.BeltRouteMode;
 import art.arcane.satiscraftory.item.ConveyorItem;
@@ -179,10 +180,10 @@ public final class ConveyorPlacementPreview {
 
         if (event.getAction() == GLFW.GLFW_PRESS) {
             BeltRouteMode mode = placement.mode().next();
-            if (ConveyorItem.selectRouteMode(player, mode)) {
-                BeltPlacementNetwork.selectRouteMode(mode);
-                player.displayClientMessage(Component.literal("Belt route: " + mode.label()), true);
-            }
+            BeltClientConfig.rememberMode(mode);
+            ConveyorItem.selectRouteMode(player, mode);
+            BeltPlacementNetwork.selectRouteMode(mode);
+            player.displayClientMessage(Component.literal("Belt route: " + mode.label()), true);
         }
         if (minecraft.options.keyPlayerList.matches(event.getKey(), event.getScanCode())) {
             minecraft.options.keyPlayerList.setDown(false);

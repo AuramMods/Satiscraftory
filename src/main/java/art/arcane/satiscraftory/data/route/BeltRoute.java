@@ -4,6 +4,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /** A belt centerline in coordinates relative to its start block. Progress is measured by distance. */
 public final class BeltRoute {
@@ -12,6 +13,10 @@ public final class BeltRoute {
     private final double[] distances;
 
     BeltRoute(List<Vec3> points) {
+        this(points, Map.of());
+    }
+
+    BeltRoute(List<Vec3> points, Map<Integer, Vec3> exactSides) {
         this.points = points.toArray(Vec3[]::new);
         sides = new Vec3[this.points.length];
         distances = new double[this.points.length];
@@ -32,6 +37,7 @@ public final class BeltRoute {
                     : bisector.scale(1.0D / Math.max(0.5D, 1.0D + incoming.dot(outgoing)));
             incoming = outgoing;
         }
+        exactSides.forEach((index, side) -> sides[index] = side);
     }
 
     public int pointCount() {
