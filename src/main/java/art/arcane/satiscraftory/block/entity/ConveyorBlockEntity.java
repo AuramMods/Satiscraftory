@@ -44,7 +44,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class ConveyorBlockEntity extends BlockEntity {
-    private static final double MIN_CARGO_SPACING = 0.75D;
+    private static final double MIN_CARGO_SPACING = 0.625D;
     private static final int LEGACY_SLOTS_PER_BLOCK = 3;
     private static final int DEFAULT_TRAVEL_TICKS_PER_BLOCK = 60;
     private static final double CLIENT_POSITION_CORRECTION_GAIN = 0.25D;

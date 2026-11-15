@@ -31,7 +31,7 @@ import java.util.WeakHashMap;
 public final class ConveyorItemRenderer extends EntityRenderer<SplineVisualItemEntity> {
     private static final double CONTACT_CLEARANCE = 1.0D / 1024.0D;
     private static final double MAX_CARGO_FOOTPRINT = 0.5D;
-    private static final double SLOT_FOOTPRINT_FRACTION = 0.7D;
+    private static final double SLOT_FOOTPRINT_FRACTION = 0.75D;
     private static final double PICK_PADDING = 1.0D / 64.0D;
     private static final Map<SplineVisualItemEntity, CachedModel> RESTING_MODELS = new WeakHashMap<>();
 
