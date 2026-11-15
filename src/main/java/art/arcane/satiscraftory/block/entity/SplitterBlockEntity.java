@@ -233,11 +233,11 @@ public class SplitterBlockEntity extends BlockEntity {
         };
     }
 
-    private boolean canInsertFromSide(Direction side) {
+    public boolean canInsertFromSide(Direction side) {
         return side == getInputSide(getBlockState());
     }
 
-    private boolean canExtractFromSide(Direction side) {
+    public boolean canExtractFromSide(Direction side) {
         if (!side.getAxis().isHorizontal()) {
             return false;
         }

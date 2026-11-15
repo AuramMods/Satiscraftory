@@ -208,14 +208,14 @@ public class MergerBlockEntity extends BlockEntity {
         return Direction.NORTH;
     }
 
-    private boolean canInsertFromSide(Direction side) {
+    public boolean canInsertFromSide(Direction side) {
         if (!side.getAxis().isHorizontal()) {
             return false;
         }
         return side != getOutputSide(getBlockState());
     }
 
-    private boolean canExtractFromSide(Direction side) {
+    public boolean canExtractFromSide(Direction side) {
         return side == getOutputSide(getBlockState());
     }
 

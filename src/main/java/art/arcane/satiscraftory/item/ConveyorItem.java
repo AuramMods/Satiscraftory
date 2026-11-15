@@ -73,16 +73,12 @@ public class ConveyorItem extends BlockItem {
         PlacementState state = readPlacementState(player);
         BlockPos clickedPos = context.getClickedPos();
         Direction clickedFace = context.getClickedFace();
-        boolean targetingContainer = isShiftTargetingContainerFace(player, clickedPos, clickedFace);
+        boolean targetingConnection = isTargetingConnectionFace(player, clickedPos, clickedFace, state == null);
 
         if (state == null) {
             BlockPos startPos;
             Direction startFacing = null;
-            if (player.isShiftKeyDown()) {
-                if (!targetingContainer) {
-                    return InteractionResult.PASS;
-                }
-
+            if (targetingConnection) {
                 startPos = clickedPos.relative(clickedFace);
                 if (!canPlaceBeltStart(level, startPos)) {
                     if (!level.isClientSide) {
@@ -91,6 +87,8 @@ public class ConveyorItem extends BlockItem {
                     return InteractionResult.FAIL;
                 }
                 startFacing = clickedFace;
+            } else if (player.isShiftKeyDown()) {
+                return InteractionResult.PASS;
             } else {
                 startPos = resolvePlacementPos(context);
             }
@@ -117,12 +115,12 @@ public class ConveyorItem extends BlockItem {
         }
 
         BlockPos startPos = state.startPos;
-        BlockPos selectedPos = targetingContainer ? clickedPos.relative(clickedFace) : resolvePlacementPos(context);
+        BlockPos selectedPos = targetingConnection ? clickedPos.relative(clickedFace) : resolvePlacementPos(context);
         boolean blockedStart = !canPlaceBeltStart(level, startPos);
 
         Direction startFacing = state.resolveStartFacing(level, selectedPos, player.getDirection());
         Direction endFacing = state.resolveEndFacing(level, selectedPos, startFacing, player.getDirection(),
-                targetingContainer ? clickedFace : null);
+                targetingConnection ? clickedFace : null);
         BeltRoute route = state.mode.create(startPos, startFacing, selectedPos, endFacing);
         int estimatedLength = route.lengthInBlocks();
         boolean overMaxLength = estimatedLength > MAX_BELT_LENGTH_BLOCKS;
@@ -202,13 +200,18 @@ public class ConveyorItem extends BlockItem {
         return level.getBlockState(pos).canBeReplaced();
     }
 
-    public static boolean isShiftTargetingContainerFace(Player player, BlockPos pos, Direction face) {
-        if (!player.isShiftKeyDown() || !face.getAxis().isHorizontal()) {
+    public static boolean isTargetingConnectionFace(Player player, BlockPos pos, Direction face, boolean starting) {
+        if (!face.getAxis().isHorizontal()) {
             return false;
         }
         BlockEntity entity = player.level().getBlockEntity(pos);
-        if (entity == null || entity instanceof ConveyorBlockEntity
-                || entity instanceof SplitterBlockEntity || entity instanceof MergerBlockEntity) {
+        if (entity instanceof MergerBlockEntity merger) {
+            return starting ? merger.canExtractFromSide(face) : merger.canInsertFromSide(face);
+        }
+        if (entity instanceof SplitterBlockEntity splitter) {
+            return starting ? splitter.canExtractFromSide(face) : splitter.canInsertFromSide(face);
+        }
+        if (!player.isShiftKeyDown() || entity == null || entity instanceof ConveyorBlockEntity) {
             return false;
         }
 
@@ -396,9 +399,9 @@ public class ConveyorItem extends BlockItem {
         }
 
         public Direction resolveEndFacing(Level level, BlockPos endPos, Direction resolvedStartFacing,
-                                          Direction fallback, @Nullable Direction containerFace) {
-            if (containerFace != null) {
-                return containerFace.getOpposite();
+                                          Direction fallback, @Nullable Direction connectionFace) {
+            if (connectionFace != null) {
+                return connectionFace.getOpposite();
             }
 
             boolean singleBlock = mode == BeltRouteMode.STRAIGHT && startPos.equals(endPos);
