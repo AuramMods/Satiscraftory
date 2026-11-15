@@ -14,6 +14,7 @@ import java.util.PriorityQueue;
 final class StraightRoute {
     private static final int CORNER_SEGMENTS = 8;
     private static final double MAX_CORNER_RADIUS = 0.625D;
+    private static final double MAX_PITCH_RADIUS = 0.25D;
     private static final double RAMP_LANDING = 0.125D;
     private static final double MIN_RAMP_RUN = 0.25D;
     private static final double FULL_RAMP_LEG = 2.0D;
@@ -43,8 +44,9 @@ final class StraightRoute {
             if (i == rampEnd) {
                 Vec3 previous = plan.get(i - 1);
                 Vec3 heading = point.subtract(previous).normalize();
-                append(points, atHeight(previous.add(heading.scale(rampInset(radii[i - 1]))), height));
-                append(points, atHeight(point.subtract(heading.scale(rampInset(radii[i]))), end.y));
+                Vec3 rampStart = atHeight(previous.add(heading.scale(rampInset(radii[i - 1]))), height);
+                Vec3 rampFinish = atHeight(point.subtract(heading.scale(rampInset(radii[i]))), end.y);
+                appendRamp(points, rampStart, rampFinish, heading, radii[i - 1] > 0.0D, radii[i] > 0.0D);
                 height = end.y;
             }
 
@@ -54,7 +56,7 @@ final class StraightRoute {
                 Vec3 into = point.subtract(plan.get(i - 1)).normalize();
                 Vec3 out = plan.get(i + 1).subtract(point).normalize();
                 appendCorner(points, arcSides, corner, into, out, radius);
-            } else {
+            } else if (i != rampEnd - 1 && i != rampEnd) {
                 append(points, corner);
             }
         }
@@ -104,6 +106,32 @@ final class StraightRoute {
 
     private static double rampInset(double radius) {
         return radius == 0.0D ? 0.0D : radius + RAMP_LANDING;
+    }
+
+    private static void appendRamp(List<Vec3> points, Vec3 start, Vec3 end, Vec3 heading,
+                                   boolean turnBefore, boolean turnAfter) {
+        Vec3 ramp = end.subtract(start);
+        double pitch = Math.atan2(ramp.y, ramp.dot(heading));
+        // Keep a straight middle on short ramps and a flat gap next to horizontal corners.
+        double maxTrim = Math.min(MAX_PITCH_RADIUS * Math.tan(Math.abs(pitch) * 0.5D), ramp.length() * 0.25D);
+        double turnTrim = Math.min(maxTrim, RAMP_LANDING * 0.75D);
+        appendPitchBend(points, start, heading, 0.0D, pitch, turnBefore ? turnTrim : maxTrim);
+        appendPitchBend(points, end, heading, pitch, 0.0D, turnAfter ? turnTrim : maxTrim);
+    }
+
+    private static void appendPitchBend(List<Vec3> points, Vec3 corner, Vec3 heading,
+                                        double fromPitch, double toPitch, double trim) {
+        double sweep = toPitch - fromPitch;
+        double radius = trim / Math.tan(sweep * 0.5D);
+        double sinFrom = Math.sin(fromPitch);
+        double cosFrom = Math.cos(fromPitch);
+        Vec3 entry = corner.subtract(heading.scale(trim * cosFrom)).add(0.0D, -trim * sinFrom, 0.0D);
+        for (int i = 0; i <= CORNER_SEGMENTS; i++) {
+            double pitch = fromPitch + sweep * i / CORNER_SEGMENTS;
+            double run = radius * (Math.sin(pitch) - sinFrom);
+            double rise = radius * (cosFrom - Math.cos(pitch));
+            append(points, entry.add(heading.scale(run)).add(0.0D, rise, 0.0D));
+        }
     }
 
     private static Vec3 atHeight(Vec3 point, double height) {
