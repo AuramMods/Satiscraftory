@@ -2,7 +2,9 @@ package art.arcane.satiscraftory.data.route;
 
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -45,6 +47,28 @@ public final class BeltRoute {
 
     public int pointCount() {
         return points.length;
+    }
+
+    BeltRoute withPortExtensions(Vec3 input, Vec3 output) {
+        boolean extendInput = input.lengthSqr() > 0.0D;
+        boolean extendOutput = output.lengthSqr() > 0.0D;
+        if (!extendInput && !extendOutput) {
+            return this;
+        }
+
+        List<Vec3> extended = new ArrayList<>(points.length + 2);
+        Map<Integer, Vec3> originalSides = new HashMap<>();
+        if (extendInput) {
+            extended.add(points[0].add(input));
+        }
+        for (int i = 0; i < points.length; i++) {
+            originalSides.put(extended.size(), sides[i]);
+            extended.add(points[i]);
+        }
+        if (extendOutput) {
+            extended.add(points[points.length - 1].add(output));
+        }
+        return new BeltRoute(extended, originalSides);
     }
 
     public Vec3 point(int index) {

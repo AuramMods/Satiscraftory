@@ -138,7 +138,7 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
             return;
         }
 
-        BeltRoute route = blockEntity.getRoute();
+        BeltRoute route = blockEntity.getVisualRoute();
 
         Matrix4f pose = poseStack.last().pose();
         Matrix3f normal = poseStack.last().normal();

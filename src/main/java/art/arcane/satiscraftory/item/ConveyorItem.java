@@ -119,8 +119,14 @@ public class ConveyorItem extends BlockItem {
         boolean blockedStart = !canPlaceBeltStart(level, startPos);
 
         Direction startFacing = state.resolveStartFacing(level, selectedPos, player.getDirection());
+        if (startFacing == null) {
+            return noOpenBeltPort(player);
+        }
         Direction endFacing = state.resolveEndFacing(level, selectedPos, startFacing, player.getDirection(),
                 targetingConnection ? clickedFace : null);
+        if (endFacing == null) {
+            return noOpenBeltPort(player);
+        }
         BeltRoute route = state.mode.create(startPos, startFacing, selectedPos, endFacing);
         int estimatedLength = route.lengthInBlocks();
         boolean overMaxLength = estimatedLength > MAX_BELT_LENGTH_BLOCKS;
@@ -172,6 +178,13 @@ public class ConveyorItem extends BlockItem {
         clearPlacementState(player);
         player.displayClientMessage(Component.literal("Belt endpoint set: " + formatPos(selectedPos)), true);
         return InteractionResult.SUCCESS;
+    }
+
+    private static InteractionResult noOpenBeltPort(Player player) {
+        if (!player.level().isClientSide) {
+            player.displayClientMessage(Component.literal("No open belt port at the selected endpoints."), true);
+        }
+        return InteractionResult.FAIL;
     }
 
     private static void playPlaceSound(Level level, BlockPos pos, BlockState state) {
@@ -311,29 +324,30 @@ public class ConveyorItem extends BlockItem {
         return dz > 0 ? Direction.SOUTH : Direction.NORTH;
     }
 
+    @Nullable
     public static Direction resolveStartFacing(Level level, BlockPos startPos, BlockPos endPos, Direction fallback) {
         Direction dominant = resolveDominantFacing(startPos, endPos, fallback);
-        Direction preferredSourceDirection = dominant.getOpposite();
-        Direction sourceDirection = chooseNeighborDirection(level, startPos, preferredSourceDirection, null);
-        if (sourceDirection != null) {
-            return sourceDirection.getOpposite();
-        }
-        return dominant;
+        Direction source = chooseNeighborDirection(level, startPos, dominant.getOpposite(), null, true);
+        return source == null ? null : source.getOpposite();
     }
 
     @Nullable
     private static Direction chooseNeighborDirection(Level level, BlockPos centerPos, Direction preferredDirection,
-                                                     @Nullable Direction excludedDirection) {
+                                                     @Nullable Direction excludedDirection, boolean source) {
         Direction best = null;
         int bestScore = Integer.MAX_VALUE;
 
         for (Direction direction : Direction.Plane.HORIZONTAL) {
-            BlockPos neighborPos = centerPos.relative(direction);
-            if (direction == excludedDirection || !isConnectionCandidate(level, neighborPos)) {
+            if (direction == excludedDirection) {
+                continue;
+            }
+            NeighborPort port = neighborPort(level, centerPos.relative(direction), direction.getOpposite(), source);
+            if (port == NeighborPort.BLOCKED) {
                 continue;
             }
 
-            int score = directionTurnCost(direction, preferredDirection);
+            // Prefer a usable connection. An open side is a fallback when there is no adjacent port.
+            int score = directionTurnCost(direction, preferredDirection) + (port == NeighborPort.OPEN ? 3 : 0);
             if (score < bestScore) {
                 bestScore = score;
                 best = direction;
@@ -347,31 +361,40 @@ public class ConveyorItem extends BlockItem {
         return best;
     }
 
-    private static boolean isConnectionCandidate(Level level, BlockPos neighborPos) {
+    private static NeighborPort neighborPort(Level level, BlockPos neighborPos, Direction face, boolean source) {
         BlockState state = level.getBlockState(neighborPos);
-        if (state.getBlock() instanceof ConveyorConnectable
-                || state.getBlock() instanceof ConveyorBlock
-                || state.getBlock() instanceof ConveyorEndBlock) {
-            return true;
+        if (state.getBlock() instanceof ConveyorEndBlock) {
+            return source && state.getValue(ConveyorEndBlock.FACING) == face ? NeighborPort.CONNECTED : NeighborPort.BLOCKED;
         }
-
         BlockEntity blockEntity = level.getBlockEntity(neighborPos);
-        if (blockEntity == null) {
-            return false;
+        if (state.getBlock() instanceof ConveyorBlock) {
+            if (!(blockEntity instanceof ConveyorBlockEntity belt) || belt.getEndPos() == null) {
+                return NeighborPort.BLOCKED;
+            }
+            boolean fits = source ? neighborPos.equals(belt.getEndPos()) && belt.getEndFacing() == face
+                    : state.getValue(ConveyorBlock.FACING).getOpposite() == face;
+            return fits ? NeighborPort.CONNECTED : NeighborPort.BLOCKED;
         }
-
+        if (state.getBlock() instanceof ConveyorConnectable) {
+            return NeighborPort.CONNECTED;
+        }
+        if (blockEntity == null) {
+            return NeighborPort.OPEN;
+        }
         if (blockEntity.getCapability(ForgeCapabilities.ITEM_HANDLER, null).isPresent()) {
-            return true;
+            return NeighborPort.CONNECTED;
         }
 
         for (Direction side : Direction.values()) {
             if (blockEntity.getCapability(ForgeCapabilities.ITEM_HANDLER, side).isPresent()) {
-                return true;
+                return NeighborPort.CONNECTED;
             }
         }
 
-        return false;
+        return NeighborPort.OPEN;
     }
+
+    private enum NeighborPort { CONNECTED, OPEN, BLOCKED }
 
     private static int directionTurnCost(Direction direction, Direction preferredDirection) {
         if (direction == preferredDirection) {
@@ -394,10 +417,16 @@ public class ConveyorItem extends BlockItem {
     }
 
     public record PlacementState(BlockPos startPos, String dimensionId, @Nullable Direction startFacing, BeltRouteMode mode) {
+        @Nullable
         public Direction resolveStartFacing(Level level, BlockPos endPos, Direction fallback) {
-            return startFacing != null ? startFacing : ConveyorItem.resolveStartFacing(level, startPos, endPos, fallback);
+            if (startFacing == null) {
+                return ConveyorItem.resolveStartFacing(level, startPos, endPos, fallback);
+            }
+            return neighborPort(level, startPos.relative(startFacing.getOpposite()), startFacing, true) == NeighborPort.BLOCKED
+                    ? null : startFacing;
         }
 
+        @Nullable
         public Direction resolveEndFacing(Level level, BlockPos endPos, Direction resolvedStartFacing,
                                           Direction fallback, @Nullable Direction connectionFace) {
             if (connectionFace != null) {
@@ -407,8 +436,7 @@ public class ConveyorItem extends BlockItem {
             boolean singleBlock = mode == BeltRouteMode.STRAIGHT && startPos.equals(endPos);
             Direction preferred = singleBlock ? resolvedStartFacing : resolveDominantFacing(startPos, endPos, fallback);
             Direction excluded = singleBlock ? resolvedStartFacing.getOpposite() : null;
-            Direction sink = chooseNeighborDirection(level, endPos, preferred, excluded);
-            return sink == null ? preferred : sink;
+            return chooseNeighborDirection(level, endPos, preferred, excluded, false);
         }
     }
 }

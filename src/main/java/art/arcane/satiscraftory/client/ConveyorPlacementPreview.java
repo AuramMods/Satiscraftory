@@ -2,6 +2,7 @@ package art.arcane.satiscraftory.client;
 
 import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.config.BeltClientConfig;
+import art.arcane.satiscraftory.data.route.BeltPortInsets;
 import art.arcane.satiscraftory.data.route.BeltRoute;
 import art.arcane.satiscraftory.data.route.BeltRouteMode;
 import art.arcane.satiscraftory.item.ConveyorItem;
@@ -39,6 +40,7 @@ public final class ConveyorPlacementPreview {
     private static final double FACE_OUTSET = 0.003D;
     private static PreviewKey previewKey;
     private static BeltRoute previewRoute;
+    private static boolean previewOverMaxLength;
 
     private ConveyorPlacementPreview() {
     }
@@ -77,14 +79,22 @@ public final class ConveyorPlacementPreview {
         BlockPos previewEndPos = targetingConnection ? clickedPos.relative(clickedFace)
                 : ConveyorItem.resolvePreviewEndPos(level, clickedPos, clickedFace);
         Direction startFacing = placement.resolveStartFacing(level, previewEndPos, player.getDirection());
+        if (startFacing == null) {
+            return;
+        }
         Direction endFacing = placement.resolveEndFacing(level, previewEndPos, startFacing, player.getDirection(),
                 targetingConnection ? clickedFace : null);
-        PreviewKey key = new PreviewKey(startPos, startFacing, previewEndPos, endFacing, placement.mode());
+        if (endFacing == null) {
+            return;
+        }
+        var insets = BeltPortInsets.measure(level, startPos, startFacing, previewEndPos, endFacing);
+        PreviewKey key = new PreviewKey(startPos, startFacing, previewEndPos, endFacing, placement.mode(), insets);
         if (!key.equals(previewKey)) {
-            previewRoute = key.mode().create(startPos, startFacing, previewEndPos, endFacing);
+            BeltRoute base = key.mode().create(startPos, startFacing, previewEndPos, endFacing);
+            previewOverMaxLength = base.lengthInBlocks() > ConveyorItem.MAX_BELT_LENGTH_BLOCKS;
+            previewRoute = insets.extend(base, startFacing, endFacing);
             previewKey = key;
         }
-        boolean overMaxLength = previewRoute.lengthInBlocks() > ConveyorItem.MAX_BELT_LENGTH_BLOCKS;
 
         Vec3 camera = event.getCamera().getPosition();
         PoseStack poseStack = event.getPoseStack();
@@ -103,7 +113,7 @@ public final class ConveyorPlacementPreview {
             Vec3 fromSide = previewRoute.side(i - 1).scale(RAIL_OFFSET);
             Vec3 toSide = previewRoute.side(i).scale(RAIL_OFFSET);
 
-            if (overMaxLength) {
+            if (previewOverMaxLength) {
                 drawLine(lineBuffer, pose, normal, from, to, 255, 64, 64, 255);
                 drawLine(lineBuffer, pose, normal, from.add(fromSide), to.add(toSide), 220, 40, 40, 220);
                 drawLine(lineBuffer, pose, normal, from.subtract(fromSide), to.subtract(toSide), 220, 40, 40, 220);
@@ -230,6 +240,6 @@ public final class ConveyorPlacementPreview {
     }
 
     private record PreviewKey(BlockPos start, Direction startFacing, BlockPos end, Direction endFacing,
-                              BeltRouteMode mode) {
+                              BeltRouteMode mode, BeltPortInsets insets) {
     }
 }

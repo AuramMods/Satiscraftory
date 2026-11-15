@@ -5,6 +5,7 @@ import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import art.arcane.satiscraftory.client.SatiscraftoryClient;
 import art.arcane.satiscraftory.data.route.BeltHitbox;
+import art.arcane.satiscraftory.data.route.BeltPortInsets;
 import art.arcane.satiscraftory.data.route.BeltRoute;
 import art.arcane.satiscraftory.data.route.BeltRouteMode;
 import art.arcane.satiscraftory.interaction.BeltTargeting;
@@ -87,6 +88,10 @@ public class ConveyorBlockEntity extends BlockEntity {
     private Direction endFacing = Direction.NORTH;
     private BeltRouteMode routeMode = BeltRouteMode.SPLINE;
     private BeltRoute route;
+    private BeltRoute visualRoute;
+    private BeltRoute visualBaseRoute;
+    private BeltPortInsets visualPortInsets;
+    private long visualRouteTick = Long.MIN_VALUE;
     private BeltRoute hitboxRoute;
     private BeltHitbox hitbox;
     private Direction routeStartFacing;
@@ -160,12 +165,30 @@ public class ConveyorBlockEntity extends BlockEntity {
     }
 
     public BeltHitbox getHitbox() {
-        BeltRoute currentRoute = getRoute();
+        BeltRoute currentRoute = getVisualRoute();
         if (hitboxRoute != currentRoute) {
             hitbox = new BeltHitbox(currentRoute, ((ConveyorBlock) getBlockState().getBlock()).getTier());
             hitboxRoute = currentRoute;
         }
         return hitbox;
+    }
+
+    public BeltRoute getVisualRoute() {
+        BeltRoute base = getRoute();
+        if (level == null || endPos == null) {
+            return base;
+        }
+        long now = level.getGameTime();
+        if (visualBaseRoute != base || visualRouteTick != now) {
+            BeltPortInsets insets = BeltPortInsets.measure(level, worldPosition, routeStartFacing, endPos, getOutputSide());
+            if (visualBaseRoute != base || !insets.equals(visualPortInsets)) {
+                visualRoute = insets.extend(base, routeStartFacing, getOutputSide());
+                visualBaseRoute = base;
+                visualPortInsets = insets;
+            }
+            visualRouteTick = now;
+        }
+        return visualRoute;
     }
 
     public void setEndData(BlockPos endPos, Direction endFacing, BeltRouteMode mode) {
@@ -800,7 +823,8 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
 
         BlockEntity blockEntity = level.getBlockEntity(resolveInputTargetPos());
-        if (blockEntity == null || blockEntity == this) {
+        // Belt-to-belt pulls are handled by the direct handoff, which checks the upstream outlet position.
+        if (blockEntity == null || blockEntity instanceof ConveyorBlockEntity) {
             return null;
         }
 
@@ -820,6 +844,10 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
 
         Direction outputSide = getOutputSide();
+        if (blockEntity instanceof ConveyorBlockEntity target
+                && (target.endPos == null || !target.canInsertFromSide(outputSide.getOpposite()))) {
+            return null;
+        }
         return getItemHandler(blockEntity, outputSide.getOpposite());
     }
 
@@ -1674,7 +1702,7 @@ public class ConveyorBlockEntity extends BlockEntity {
     }
 
     private Vec3 deckPosition(double progress) {
-        return getRoute().position(progress)
+        return getVisualRoute().position(progress)
                 .add(worldPosition.getX(), worldPosition.getY() + BeltRoute.DECK_HEIGHT, worldPosition.getZ());
     }
 
@@ -1904,7 +1932,7 @@ public class ConveyorBlockEntity extends BlockEntity {
             }
 
             public Vec3 direction() {
-                return belt.getRoute().surfaceDirection(progress);
+                return belt.getVisualRoute().surfaceDirection(progress);
             }
         }
 
@@ -1915,8 +1943,8 @@ public class ConveyorBlockEntity extends BlockEntity {
         private void enterBelt(ConveyorBlockEntity next) {
             incomingFrom = conveyor;
             // Negative progress on the new belt measures the distance remaining on the old one.
-            double incomingSlotLength = conveyor.getRoute().length() / conveyor.bufferSlots;
-            double nextSlotLength = next.getRoute().length() / next.bufferSlots;
+            double incomingSlotLength = conveyor.getVisualRoute().length() / conveyor.bufferSlots;
+            double nextSlotLength = next.getVisualRoute().length() / next.bufferSlots;
             slotsPerIncomingSlot = incomingSlotLength / nextSlotLength;
             previousSlotUnits = (previousSlotUnits - conveyor.bufferSlots) * slotsPerIncomingSlot;
             slotUnits = (slotUnits - conveyor.bufferSlots) * slotsPerIncomingSlot;
