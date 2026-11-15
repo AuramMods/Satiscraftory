@@ -194,7 +194,7 @@ public final class ConveyorPlacementPreview {
         drawLine(lines, pose, normal, from, to, 45, 240, 255, 255);
     }
 
-    private static void drawLine(VertexConsumer consumer,
+    static void drawLine(VertexConsumer consumer,
                                  Matrix4f pose,
                                  Matrix3f normalMatrix,
                                  Vec3 from,

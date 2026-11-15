@@ -4,8 +4,10 @@ import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import art.arcane.satiscraftory.client.SatiscraftoryClient;
+import art.arcane.satiscraftory.data.route.BeltHitbox;
 import art.arcane.satiscraftory.data.route.BeltRoute;
 import art.arcane.satiscraftory.data.route.BeltRouteMode;
+import art.arcane.satiscraftory.interaction.BeltTargeting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -17,6 +19,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Containers;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
@@ -26,12 +29,17 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.items.IItemHandler;
+import net.minecraftforge.items.ItemHandlerHelper;
 import net.minecraftforge.items.ItemStackHandler;
+import net.minecraftforge.items.wrapper.PlayerMainInvWrapper;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -67,6 +75,7 @@ public class ConveyorBlockEntity extends BlockEntity {
     private static final String SYNC_REVISION_TAG = "sync_revision";
     private static final String DIRECT_INPUT_TAG = "direct_input";
     private static final String BLOCKED_OUTPUT_ITEM_TAG = "blocked_output_item";
+    private static final String PICKED_UP_ITEMS_TAG = "picked_up_items";
 
     private static long NEXT_ITEM_ID = 1L;
     private static long nextClientSnapshotOrder;
@@ -76,6 +85,8 @@ public class ConveyorBlockEntity extends BlockEntity {
     private Direction endFacing = Direction.NORTH;
     private BeltRouteMode routeMode = BeltRouteMode.SPLINE;
     private BeltRoute route;
+    private BeltRoute hitboxRoute;
+    private BeltHitbox hitbox;
     private Direction routeStartFacing;
     private int beltLengthBlocks = 1;
     private int bufferSlots = SLOTS_PER_BLOCK;
@@ -93,6 +104,7 @@ public class ConveyorBlockEntity extends BlockEntity {
     private final Map<Direction, LazyOptional<IItemHandler>> sidedCapabilities = new EnumMap<>(Direction.class);
 
     private final Map<Long, SplineVisualItemEntity> clientVisualItems = new HashMap<>();
+    private final Set<Long> pickedUpItems = new HashSet<>();
     private long lastAccumulatorTick = Long.MIN_VALUE;
     private long lastSyncPacketGameTime = Long.MIN_VALUE;
     private double stepAccumulator;
@@ -143,12 +155,22 @@ public class ConveyorBlockEntity extends BlockEntity {
         return route;
     }
 
+    public BeltHitbox getHitbox() {
+        BeltRoute currentRoute = getRoute();
+        if (hitboxRoute != currentRoute) {
+            hitbox = new BeltHitbox(currentRoute, ((ConveyorBlock) getBlockState().getBlock()).getTier());
+            hitboxRoute = currentRoute;
+        }
+        return hitbox;
+    }
+
     public void setEndData(BlockPos endPos, Direction endFacing, BeltRouteMode mode) {
         BlockPos previousEndPos = this.endPos;
         this.endPos = endPos.immutable();
         this.endFacing = endFacing.getAxis().isHorizontal() ? endFacing : Direction.NORTH;
         routeMode = mode;
         route = null;
+        BeltTargeting.update(this);
         recalculateLengthAndResize();
         nextEndMarkerValidationTick = Long.MIN_VALUE;
         if (level != null && !level.isClientSide) {
@@ -182,7 +204,20 @@ public class ConveyorBlockEntity extends BlockEntity {
     }
 
     @Override
+    public void onLoad() {
+        super.onLoad();
+        BeltTargeting.update(this);
+    }
+
+    @Override
+    public void onChunkUnloaded() {
+        BeltTargeting.remove(this);
+        super.onChunkUnloaded();
+    }
+
+    @Override
     public void setRemoved() {
+        BeltTargeting.remove(this);
         clearClientVisuals();
         super.setRemoved();
     }
@@ -242,6 +277,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         routeMode = loadedMode == null ? BeltRouteMode.SPLINE : loadedMode;
         if (!Objects.equals(previousEndPos, endPos) || previousEndFacing != endFacing || previousMode != routeMode) {
             route = null;
+            BeltTargeting.update(this);
         }
 
         beltLengthBlocks = Math.max(1, tag.getInt(BELT_LENGTH_BLOCKS_TAG));
@@ -300,6 +336,12 @@ public class ConveyorBlockEntity extends BlockEntity {
             lastClientAppliedRevision = syncRevision;
             clientSnapshotGameTime = level != null ? level.getGameTime() : Long.MIN_VALUE;
             clientSnapshotOrder = ++nextClientSnapshotOrder;
+            for (long itemId : tag.getLongArray(PICKED_UP_ITEMS_TAG)) {
+                SplineVisualItemEntity visual = clientVisualItems.remove(itemId);
+                if (visual != null) {
+                    visual.discard();
+                }
+            }
         }
 
         rebuildCapabilities();
@@ -313,7 +355,11 @@ public class ConveyorBlockEntity extends BlockEntity {
 
     @Override
     public CompoundTag getUpdateTag() {
-        return saveWithoutMetadata();
+        CompoundTag tag = saveWithoutMetadata();
+        if (!pickedUpItems.isEmpty()) {
+            tag.putLongArray(PICKED_UP_ITEMS_TAG, pickedUpItems.stream().mapToLong(Long::longValue).toArray());
+        }
+        return tag;
     }
 
     @Override
@@ -1021,18 +1067,65 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         ItemStack single = head.copy();
         single.setCount(1);
+        removeItemAt(0);
+        return new HeadTransfer(single, itemId);
+    }
 
+    private void removeItemAt(int slot) {
         suppressDirtyCallbacks = true;
-        inventory.setStackInSlot(0, ItemStack.EMPTY);
+        inventory.setStackInSlot(slot, ItemStack.EMPTY);
         suppressDirtyCallbacks = false;
-        renderPositions[0] = -1;
-        itemIds[0] = 0L;
+        renderPositions[slot] = -1;
+        itemIds[slot] = 0L;
         compactQueue();
-        blockedOutputItemId = 0L;
+        if (slot == 0) {
+            blockedOutputItemId = 0L;
+        }
         urgentSyncPending = true;
         markDirtyForSync();
+    }
 
-        return new HeadTransfer(single, itemId);
+    public boolean pickUpItem(ServerPlayer player, long itemId, BeltTargeting.Ray ray) {
+        if (player.level() != level || player.isSpectator() || itemId <= 0L) {
+            return false;
+        }
+        for (int slot = 0; slot < bufferSlots; slot++) {
+            if (itemIds[slot] != itemId || inventory.getStackInSlot(slot).isEmpty()) {
+                continue;
+            }
+            // The display predicts between snapshots. Check a short sweep along this same item's route.
+            double lagSlots = clamp(getStepsPerTick() * 4.0D, 0.75D, 3.0D);
+            double position = clampRenderPosition(renderPositions[slot]);
+            double start = Math.max(0.0D, position - lagSlots);
+            double end = Math.min(bufferSlots, position + lagSlots);
+            for (double sample = start; ; sample = Math.min(end, sample + 0.5D)) {
+                Vec3 point = computeVisualPositionForSlotUnits(sample);
+                AABB bounds = BeltTargeting.itemBounds(point);
+                Vec3 hit = bounds.contains(ray.from()) ? ray.from() : bounds.clip(ray.from(), ray.to()).orElse(null);
+                if (hit != null && level.getWorldBorder().isWithinBounds(BlockPos.containing(hit))
+                        && level.mayInteract(player, BlockPos.containing(hit))) {
+                    Vec3 look = player.getLookAngle();
+                    Direction face = Direction.getNearest(-look.x, -look.y, -look.z);
+                    var event = ForgeHooks.onRightClickBlock(player, InteractionHand.MAIN_HAND, worldPosition,
+                            new BlockHitResult(hit, face, worldPosition, false));
+                    if (event.isCanceled() || event.getUseBlock() == Event.Result.DENY
+                            || isRemoved() || itemIds[slot] != itemId) {
+                        return false;
+                    }
+                    ItemStack stack = inventory.getStackInSlot(slot).copyWithCount(1);
+                    if (!ItemHandlerHelper.insertItemStacked(new PlayerMainInvWrapper(player.getInventory()), stack, false).isEmpty()) {
+                        return false;
+                    }
+                    pickedUpItems.add(itemId);
+                    removeItemAt(slot);
+                    return true;
+                }
+                if (sample == end) {
+                    return false;
+                }
+            }
+        }
+        return false;
     }
 
     private boolean canAcceptNewItemAtStep() {
@@ -1355,7 +1448,11 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         syncRevision++;
         lastSyncPacketGameTime = now;
-        return sendUpdateToNearbyPlayers();
+        if (sendUpdateToNearbyPlayers()) {
+            pickedUpItems.clear();
+            return true;
+        }
+        return false;
     }
 
     private void syncToClient() {
@@ -1514,6 +1611,26 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
         clientVisualItems.clear();
     }
+
+    @Nullable
+    public CargoHit pickDisplayedItem(BeltTargeting.Ray ray, float partialTick) {
+        CargoHit nearest = null;
+        double closest = ray.from().distanceToSqr(ray.to());
+        for (var entry : clientVisualItems.entrySet()) {
+            if (entry.getKey() <= 0L || !entry.getValue().isAlive()) {
+                continue;
+            }
+            AABB bounds = BeltTargeting.itemBounds(entry.getValue().positionOnBelt(partialTick));
+            Vec3 hit = bounds.contains(ray.from()) ? ray.from() : bounds.clip(ray.from(), ray.to()).orElse(null);
+            if (hit != null && ray.from().distanceToSqr(hit) < closest) {
+                nearest = new CargoHit(this, entry.getKey(), hit);
+                closest = ray.from().distanceToSqr(hit);
+            }
+        }
+        return nearest;
+    }
+
+    public record CargoHit(ConveyorBlockEntity belt, long itemId, Vec3 location) {}
 
     private Vec3 computeVisualPositionForSlotUnits(double slotUnits) {
         return getRoute().position(slotUnits / bufferSlots)

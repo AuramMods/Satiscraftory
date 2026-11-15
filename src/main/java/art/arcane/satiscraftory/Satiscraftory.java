@@ -12,6 +12,7 @@ import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
 import art.arcane.satiscraftory.config.BeltClientConfig;
 import art.arcane.satiscraftory.data.ConveyorTier;
 import art.arcane.satiscraftory.item.ConveyorItem;
+import art.arcane.satiscraftory.network.BeltInteractionNetwork;
 import art.arcane.satiscraftory.network.BeltPlacementNetwork;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.registries.Registries;
@@ -62,7 +63,7 @@ public class Satiscraftory {
     public static final RegistryObject<Block> CONVEYOR_6 = registerConveyorBlock("conveyor_6", ConveyorTier.MARK_6);
     public static final RegistryObject<Block> CONVEYOR_END = BLOCKS.register(
             "conveyor_end",
-            () -> new ConveyorEndBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noOcclusion())
+            () -> new ConveyorEndBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noCollission())
     );
     public static final RegistryObject<Block> SPLITTER = BLOCKS.register(
             "splitter",
@@ -126,6 +127,7 @@ public class Satiscraftory {
     public Satiscraftory(FMLJavaModLoadingContext context) {
         context.registerConfig(ModConfig.Type.CLIENT, BeltClientConfig.SPEC);
         BeltPlacementNetwork.register();
+        BeltInteractionNetwork.register();
         IEventBus modEventBus = context.getModEventBus();
         BLOCKS.register(modEventBus);
         ITEMS.register(modEventBus);
@@ -137,7 +139,8 @@ public class Satiscraftory {
 
     private static RegistryObject<Block> registerConveyorBlock(String name, ConveyorTier tier) {
         return BLOCKS.register(name, () -> new ConveyorBlock(
-                BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL).noOcclusion(),
+                BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL)
+                        .noCollission().requiresCorrectToolForDrops(),
                 tier,
                 ResourceLocation.fromNamespaceAndPath(MODID, "models/block/" + name + ".json")
         ));

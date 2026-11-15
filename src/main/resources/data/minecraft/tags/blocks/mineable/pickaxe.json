@@ -1,0 +1,11 @@
+{
+  "replace": false,
+  "values": [
+    "satiscraftory:conveyor_1",
+    "satiscraftory:conveyor_2",
+    "satiscraftory:conveyor_3",
+    "satiscraftory:conveyor_4",
+    "satiscraftory:conveyor_5",
+    "satiscraftory:conveyor_6"
+  ]
+}
