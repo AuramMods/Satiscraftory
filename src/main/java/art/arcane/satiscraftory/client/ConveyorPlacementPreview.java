@@ -56,9 +56,13 @@ public final class ConveyorPlacementPreview {
             return;
         }
 
-        if (player.isShiftKeyDown() && minecraft.hitResult instanceof BlockHitResult target
-                && target.getType() == HitResult.Type.BLOCK) {
-            renderContainerFace(event, minecraft, level, player, target);
+        // Use the same crosshair target that Minecraft passes to right-click interactions.
+        if (!(minecraft.hitResult instanceof BlockHitResult blockHit) || blockHit.getType() != HitResult.Type.BLOCK) {
+            return;
+        }
+
+        if (player.isShiftKeyDown()) {
+            renderContainerFace(event, minecraft, level, player, blockHit);
         }
 
         ConveyorItem.PlacementState placement = ConveyorItem.getActivePlacement(player, level);
@@ -66,11 +70,6 @@ public final class ConveyorPlacementPreview {
             return;
         }
         BlockPos startPos = placement.startPos();
-
-        HitResult hit = player.pick(32.0D, event.getPartialTick(), false);
-        if (!(hit instanceof BlockHitResult blockHit) || blockHit.getType() != HitResult.Type.BLOCK) {
-            return;
-        }
 
         BlockPos previewEndPos = ConveyorItem.resolvePreviewEndPos(level, blockHit.getBlockPos(), blockHit.getDirection());
         Direction startFacing = placement.resolveStartFacing(level, previewEndPos, player.getDirection());
