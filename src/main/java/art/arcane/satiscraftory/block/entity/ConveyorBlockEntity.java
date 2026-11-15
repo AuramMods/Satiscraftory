@@ -62,7 +62,6 @@ public class ConveyorBlockEntity extends BlockEntity {
     private static final double CLIENT_COAST_TICKS = 3.0D;
     private static final double MAX_CLIENT_COAST_SLOTS = 3.0D;
     private static final double VISUAL_RANGE_BLOCKS = 16.0D;
-    private static final double ITEM_Y_OFFSET = 0.08D;
     private static final int HANDOFF_GRACE_TICKS = 3;
 
     private static final String END_POS_TAG = "end_pos";
@@ -1640,8 +1639,7 @@ public class ConveyorBlockEntity extends BlockEntity {
             if (entry.getKey() <= 0L || !entry.getValue().isAlive()) {
                 continue;
             }
-            AABB bounds = BeltTargeting.itemBounds(entry.getValue().positionOnBelt(partialTick));
-            Vec3 hit = bounds.contains(ray.from()) ? ray.from() : bounds.clip(ray.from(), ray.to()).orElse(null);
+            Vec3 hit = SatiscraftoryClient.clipConveyorItem(entry.getValue(), ray, partialTick);
             if (hit != null && ray.from().distanceToSqr(hit) < closest) {
                 nearest = new CargoHit(this, entry.getKey(), hit);
                 closest = ray.from().distanceToSqr(hit);
@@ -1653,8 +1651,12 @@ public class ConveyorBlockEntity extends BlockEntity {
     public record CargoHit(ConveyorBlockEntity belt, long itemId, Vec3 location) {}
 
     private Vec3 computeVisualPositionForSlotUnits(double slotUnits) {
-        return getRoute().position(slotUnits / bufferSlots)
-                .add(worldPosition.getX(), worldPosition.getY() + ITEM_Y_OFFSET, worldPosition.getZ());
+        return deckPosition(slotUnits / bufferSlots);
+    }
+
+    private Vec3 deckPosition(double progress) {
+        return getRoute().position(progress)
+                .add(worldPosition.getX(), worldPosition.getY() + BeltRoute.DECK_HEIGHT, worldPosition.getZ());
     }
 
     private static double clamp(double value, double min, double max) {
@@ -1840,9 +1842,6 @@ public class ConveyorBlockEntity extends BlockEntity {
     }
 
     public static final class SplineVisualItemEntity extends ItemEntity {
-        // Leave 10% of the angle error after 100 ms, independent of frame rate.
-        private static final double TURN_DECAY_PER_NANO = Math.log(10.0D) / 100_000_000.0D;
-
         private ConveyorBlockEntity conveyor;
         @Nullable
         private ConveyorBlockEntity incomingFrom;
@@ -1852,9 +1851,6 @@ public class ConveyorBlockEntity extends BlockEntity {
         private long motionTick = Long.MIN_VALUE;
         private long snapshotOrder;
         private int departureTicks;
-        private long lastFacingUpdateNanos = Long.MIN_VALUE;
-        private float facingYaw;
-        private float facingPitch;
 
         private SplineVisualItemEntity(ConveyorBlockEntity conveyor, Level level, Vec3 position,
                                        ItemStack stack, double slotUnits) {
@@ -1872,12 +1868,25 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
 
         public Vec3 positionOnBelt(float partialTick) {
+            return locationOnBelt(partialTick).position();
+        }
+
+        public BeltLocation locationOnBelt(float partialTick) {
             double progress = Mth.lerp(partialTick, previousSlotUnits, slotUnits);
             if (progress < 0.0D && incomingFrom != null) {
-                return incomingFrom.computeVisualPositionForSlotUnits(
-                        incomingFrom.bufferSlots + progress / slotsPerIncomingSlot);
+                return new BeltLocation(incomingFrom, 1.0D + progress / (slotsPerIncomingSlot * incomingFrom.bufferSlots));
             }
-            return conveyor.computeVisualPositionForSlotUnits(progress);
+            return new BeltLocation(conveyor, progress / conveyor.bufferSlots);
+        }
+
+        public record BeltLocation(ConveyorBlockEntity belt, double progress) {
+            public Vec3 position() {
+                return belt.deckPosition(progress);
+            }
+
+            public Vec3 direction() {
+                return belt.getRoute().surfaceDirection(progress);
+            }
         }
 
         private boolean canEnterNextBelt(long now) {
@@ -1928,31 +1937,6 @@ public class ConveyorBlockEntity extends BlockEntity {
         @Override
         public boolean isPickable() {
             return false;
-        }
-
-        public void turnToward(Vec3 offsetToCamera, long nowNanos) {
-            double horizontalDistance = Math.hypot(offsetToCamera.x, offsetToCamera.z);
-            if (horizontalDistance < 1.0E-5D && Math.abs(offsetToCamera.y) < 1.0E-5D) {
-                return;
-            }
-
-            // The model's front is +Z. Keep the last yaw when we are directly above or below it.
-            float targetYaw = horizontalDistance < 1.0E-5D ? facingYaw
-                    : (float) Math.toDegrees(Math.atan2(offsetToCamera.x, offsetToCamera.z));
-            float targetPitch = (float) -Math.toDegrees(Math.atan2(offsetToCamera.y, horizontalDistance));
-            float blend = lastFacingUpdateNanos == Long.MIN_VALUE ? 1.0F
-                    : (float) -Math.expm1(-TURN_DECAY_PER_NANO * (nowNanos - lastFacingUpdateNanos));
-            facingYaw = Mth.wrapDegrees(Mth.rotLerp(blend, facingYaw, targetYaw));
-            facingPitch = Mth.lerp(blend, facingPitch, targetPitch);
-            lastFacingUpdateNanos = nowNanos;
-        }
-
-        public float getFacingYaw() {
-            return facingYaw;
-        }
-
-        public float getFacingPitch() {
-            return facingPitch;
         }
     }
 }

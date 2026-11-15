@@ -8,10 +8,11 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
+import static art.arcane.satiscraftory.data.route.BeltRoute.DECK_HEIGHT;
+
 /** Selection geometry in belt-local coordinates. The profile follows the deck and both rails. */
 public final class BeltHitbox {
     private static final double EPSILON = 1.0E-8D;
-    private static final double DECK_HEIGHT = 1.0D / 16.0D;
 
     private final Vec3[][] rings;
     private final AABB[] spans;

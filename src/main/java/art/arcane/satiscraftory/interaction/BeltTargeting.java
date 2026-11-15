@@ -127,8 +127,9 @@ public final class BeltTargeting {
     }
 
     public static AABB itemBounds(Vec3 location) {
-        return new AABB(location.x - 0.25D, location.y, location.z - 0.25D,
-                location.x + 0.25D, location.y + 0.6D, location.z + 0.25D);
+        // The server has no baked models. Allow for laid-flat cargo overhanging either side of an incline.
+        return new AABB(location.x - 0.5D, location.y - 0.375D, location.z - 0.5D,
+                location.x + 0.5D, location.y + 0.625D, location.z + 0.5D);
     }
 
     private static int chunk(double coordinate) {

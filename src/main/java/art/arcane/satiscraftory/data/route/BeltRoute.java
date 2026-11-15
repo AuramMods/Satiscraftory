@@ -8,6 +8,9 @@ import java.util.Map;
 
 /** A belt centerline in coordinates relative to its start block. Progress is measured by distance. */
 public final class BeltRoute {
+    public static final double DECK_HEIGHT = 1.0D / 16.0D;
+    private static final double DIRECTION_SAMPLE_DISTANCE = 1.0D / 16.0D;
+
     private final Vec3[] points;
     private final Vec3[] sides;
     private final double[] distances;
@@ -80,6 +83,13 @@ public final class BeltRoute {
     public Vec3 tangent(double progress) {
         int segment = segmentAt(distanceAt(progress));
         return points[segment + 1].subtract(points[segment]).normalize();
+    }
+
+    public Vec3 surfaceDirection(double progress) {
+        // Sample across nearby mesh joints so cargo turns continuously as it moves through them.
+        double span = DIRECTION_SAMPLE_DISTANCE / length();
+        Vec3 direction = position(progress + span).subtract(position(progress - span)).normalize();
+        return direction.lengthSqr() > 0.0D ? direction : tangent(progress);
     }
 
     private double distanceAt(double progress) {
