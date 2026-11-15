@@ -124,11 +124,15 @@ public class ConveyorBlock extends BaseEntityBlock {
             return;
         }
         for (ItemStack drop : drops) {
-            if (!drop.isEmpty()) {
-                ItemEntity item = new ItemEntity(level, location.x, location.y + 0.05D, location.z, drop, 0, 0, 0);
-                item.setDefaultPickUpDelay();
-                level.addFreshEntity(item);
-            }
+            dropAt(level, location, drop);
+        }
+    }
+
+    public static void dropAt(ServerLevel level, Vec3 location, ItemStack stack) {
+        if (!stack.isEmpty()) {
+            ItemEntity item = new ItemEntity(level, location.x, location.y + 0.05D, location.z, stack, 0, 0, 0);
+            item.setDefaultPickUpDelay();
+            level.addFreshEntity(item);
         }
     }
 
@@ -136,9 +140,13 @@ public class ConveyorBlock extends BaseEntityBlock {
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock())) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
-            if (blockEntity instanceof ConveyorBlockEntity splineEntity) {
-                splineEntity.removeLinkedEndMarker();
-                splineEntity.dropContents(level);
+            if (blockEntity instanceof ConveyorBlockEntity belt) {
+                // All tiers share an entity type. Keep it through tier changes and Forge placement rollbacks.
+                if (belt.getType().isValid(newState)) {
+                    return;
+                }
+                belt.removeLinkedEndMarker();
+                belt.dropContents(level);
             }
             super.onRemove(state, level, pos, newState, isMoving);
         }

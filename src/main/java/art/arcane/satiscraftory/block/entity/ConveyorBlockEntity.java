@@ -96,6 +96,16 @@ public class ConveyorBlockEntity extends BlockEntity {
         return travelTicksPerBlock;
     }
 
+    @Override
+    public void setBlockState(BlockState state) {
+        boolean changedTier = getBlockState().getBlock() != state.getBlock() && state.getBlock() instanceof ConveyorBlock;
+        super.setBlockState(state);
+        if (changedTier) {
+            travelTicksPerBlock = resolveTravelTicksPerBlock(state);
+            markDirtyForSync();
+        }
+    }
+
     public BeltRoute getRoute() {
         return endpoints.getRoute();
     }

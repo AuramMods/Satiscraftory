@@ -3,6 +3,7 @@ package art.arcane.satiscraftory.block.entity;
 import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.ConveyorEndBlock;
+import art.arcane.satiscraftory.data.ConveyorTier;
 import art.arcane.satiscraftory.data.route.BeltHitbox;
 import art.arcane.satiscraftory.data.route.BeltPortInsets;
 import art.arcane.satiscraftory.data.route.BeltRoute;
@@ -37,6 +38,7 @@ final class ConveyorEndpoints {
     private BeltPortInsets visualPortInsets;
     private long visualRouteTick = Long.MIN_VALUE;
     private BeltRoute hitboxRoute;
+    private ConveyorTier hitboxTier;
     private BeltHitbox hitbox;
     private Direction routeStartFacing;
     private long nextEndMarkerValidationTick = Long.MIN_VALUE;
@@ -113,9 +115,11 @@ final class ConveyorEndpoints {
 
     BeltHitbox getHitbox() {
         BeltRoute currentRoute = getVisualRoute();
-        if (hitboxRoute != currentRoute) {
-            hitbox = new BeltHitbox(currentRoute, ((ConveyorBlock) belt.getBlockState().getBlock()).getTier());
+        ConveyorTier tier = ((ConveyorBlock) belt.getBlockState().getBlock()).getTier();
+        if (hitboxRoute != currentRoute || hitboxTier != tier) {
+            hitbox = new BeltHitbox(currentRoute, tier);
             hitboxRoute = currentRoute;
+            hitboxTier = tier;
         }
         return hitbox;
     }

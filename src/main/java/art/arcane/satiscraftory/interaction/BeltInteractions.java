@@ -1,7 +1,9 @@
 package art.arcane.satiscraftory.interaction;
 
 import art.arcane.satiscraftory.Satiscraftory;
+import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
+import art.arcane.satiscraftory.item.ConveyorItem;
 import art.arcane.satiscraftory.network.BeltInteractionNetwork;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -10,8 +12,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.event.TickEvent;
@@ -19,6 +23,8 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.items.ItemHandlerHelper;
+import net.minecraftforge.items.wrapper.PlayerMainInvWrapper;
 
 import javax.annotation.Nullable;
 import java.util.Map;
@@ -31,6 +37,32 @@ public final class BeltInteractions {
     private static final Map<ServerPlayer, Dig> DIGGING = new WeakHashMap<>();
 
     private BeltInteractions() {}
+
+    public static void swapTier(ServerPlayer player, BlockPos anchor, InteractionHand hand) {
+        BeltTargeting.Hit hit = interactionTarget(player, anchor);
+        if (hit == null || !player.getAbilities().mayBuild) {
+            return;
+        }
+        var belt = hit.belt();
+        var state = belt.getBlockState();
+        ItemStack held = player.getItemInHand(hand);
+        if (ConveyorItem.replacementTier(held, state) == null) {
+            return;
+        }
+
+        var blockHit = new BlockHitResult(hit.location(), aimedFace(player), anchor, false);
+        var event = ForgeHooks.onRightClickBlock(player, hand, anchor, blockHit);
+        if (event.isCanceled() || event.getResult() == Event.Result.DENY || event.getUseItem() == Event.Result.DENY
+                || event.getUseBlock() == Event.Result.DENY || belt.isRemoved() || belt.getBlockState() != state
+                || player.getItemInHand(hand) != held || !ConveyorItem.useForTierSwap(player, hand, blockHit)) {
+            return;
+        }
+
+        stopDigging(player);
+        ItemStack oldTier = new ItemStack(state.getBlock());
+        ItemStack remainder = ItemHandlerHelper.insertItemStacked(new PlayerMainInvWrapper(player.getInventory()), oldTier, false);
+        ConveyorBlock.dropAt(player.serverLevel(), hit.location(), remainder);
+    }
 
     public static void pickup(ServerPlayer player, BlockPos anchor, long itemId) {
         if (!player.isAlive() || player.isSpectator() || !canInteract(player, anchor)
@@ -54,7 +86,7 @@ public final class BeltInteractions {
             stopDigging(player);
             return;
         }
-        BeltTargeting.Hit hit = miningTarget(player, anchor);
+        BeltTargeting.Hit hit = interactionTarget(player, anchor);
         if (hit == null) {
             stopDigging(player);
             return;
@@ -96,7 +128,7 @@ public final class BeltInteractions {
             stopDigging(player);
             return;
         }
-        BeltTargeting.Hit hit = miningTarget(player, anchor);
+        BeltTargeting.Hit hit = interactionTarget(player, anchor);
         if (hit == null || hit.belt() != dig.belt) {
             stopDigging(player);
             return;
@@ -140,7 +172,7 @@ public final class BeltInteractions {
     }
 
     @Nullable
-    private static BeltTargeting.Hit miningTarget(ServerPlayer player, BlockPos anchor) {
+    private static BeltTargeting.Hit interactionTarget(ServerPlayer player, BlockPos anchor) {
         if (!player.isAlive() || player.isSpectator() || player.isUsingItem() || !canInteract(player, anchor)
                 || player.blockActionRestricted(player.level(), anchor, player.gameMode.getGameModeForPlayer())) {
             return null;

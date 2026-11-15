@@ -3,13 +3,16 @@ package art.arcane.satiscraftory.client;
 import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
 import art.arcane.satiscraftory.interaction.BeltTargeting;
+import art.arcane.satiscraftory.item.ConveyorItem;
 import art.arcane.satiscraftory.network.BeltInteractionNetwork;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.TerrainParticle;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -26,8 +29,11 @@ import javax.annotation.Nullable;
 @Mod.EventBusSubscriber(modid = Satiscraftory.MODID, value = Dist.CLIENT)
 public final class ConveyorInteractionInput {
     private static final int DIG_REFRESH_TICKS = 4;
+    private static final long SWAP_HIGHLIGHT_NANOS = 500_000_000L;
     private static ConveyorBlockEntity digging;
     private static int lastDigPacketTick;
+    private static ConveyorBlockEntity swapHighlightTarget;
+    private static long swapHighlightStart;
 
     private ConveyorInteractionInput() {}
 
@@ -50,6 +56,16 @@ public final class ConveyorInteractionInput {
             updateDigTarget(player, belt, minecraft);
         } else if (event.isUseItem() && event.getHand() == InteractionHand.MAIN_HAND) {
             if (belt != null) {
+                InteractionHand swapHand = tierSwapHand(player, belt.belt());
+                if (swapHand != null) {
+                    event.setCanceled(true);
+                    event.setSwingHand(false);
+                    player.connection.send(new ServerboundSetCarriedItemPacket(player.getInventory().selected));
+                    sendLook(player);
+                    BeltInteractionNetwork.swapTier(belt.belt().getBlockPos(), swapHand);
+                    player.swing(swapHand);
+                    return;
+                }
                 ray = new BeltTargeting.Ray(ray.from(), belt.location());
             }
             ConveyorBlockEntity.CargoHit cargo = nearestCargo(player, ray, partialTick);
@@ -123,24 +139,52 @@ public final class ConveyorInteractionInput {
         }
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null || minecraft.player.isSpectator() || minecraft.options.hideGui) {
+            swapHighlightTarget = null;
             return;
         }
         BeltTargeting.Hit selected = BeltTargeting.nearestBelt(minecraft.level, aim(minecraft, event.getPartialTick()));
         if (selected == null) {
+            swapHighlightTarget = null;
             return;
         }
+        var belt = selected.belt();
+        int yellow = highlightYellow(tierSwapHand(minecraft.player, belt) == null ? null : belt, Util.getNanos());
         Vec3 camera = event.getCamera().getPosition();
-        BlockPos origin = selected.belt().getBlockPos();
+        BlockPos origin = belt.getBlockPos();
         var poseStack = event.getPoseStack();
         poseStack.pushPose();
         poseStack.translate(origin.getX() - camera.x, origin.getY() - camera.y, origin.getZ() - camera.z);
         var buffer = minecraft.renderBuffers().bufferSource();
         var lines = buffer.getBuffer(RenderType.lines());
         var transform = poseStack.last();
-        selected.belt().getHitbox().forEachOutline((from, to) ->
-                ConveyorPlacementPreview.drawLine(lines, transform.pose(), transform.normal(), from, to, 0, 0, 0, 102));
+        belt.getHitbox().forEachOutline((from, to) ->
+                ConveyorPlacementPreview.drawLine(lines, transform.pose(), transform.normal(), from, to, yellow, yellow, 0, 102));
         buffer.endBatch(RenderType.lines());
         poseStack.popPose();
+    }
+
+    @Nullable
+    private static InteractionHand tierSwapHand(LocalPlayer player, ConveyorBlockEntity belt) {
+        if (!player.getAbilities().mayBuild || player.isUsingItem()) {
+            return null;
+        }
+        var state = belt.getBlockState();
+        if (ConveyorItem.replacementTier(player.getMainHandItem(), state) != null) {
+            return InteractionHand.MAIN_HAND;
+        }
+        return ConveyorItem.replacementTier(player.getOffhandItem(), state) != null ? InteractionHand.OFF_HAND : null;
+    }
+
+    private static int highlightYellow(@Nullable ConveyorBlockEntity target, long now) {
+        if (target != swapHighlightTarget) {
+            swapHighlightTarget = target;
+            swapHighlightStart = now;
+        }
+        if (target == null) {
+            return 0;
+        }
+        double t = Math.min(1.0D, (now - swapHighlightStart) / (double) SWAP_HIGHLIGHT_NANOS);
+        return t == 1.0D ? 255 : (int) Math.round(255.0D * (1.0D - Math.pow(2.0D, -10.0D * t)));
     }
 
     private static BeltTargeting.Ray aim(Minecraft minecraft, float partialTick) {

@@ -6,6 +6,7 @@ import art.arcane.satiscraftory.interaction.BeltInteractions;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkDirection;
@@ -14,7 +15,7 @@ import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class BeltInteractionNetwork {
-    private static final String PROTOCOL = "2";
+    private static final String PROTOCOL = "3";
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             ResourceLocation.fromNamespaceAndPath(Satiscraftory.MODID, "belt_interaction"),
             () -> PROTOCOL, PROTOCOL::equals, PROTOCOL::equals);
@@ -49,6 +50,16 @@ public final class BeltInteractionNetwork {
                 .consumerMainThread((message, context) -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
                         () -> () -> ConveyorMiningProgress.update(message.anchor(), message.breakerId(), message.stage())))
                 .add();
+        CHANNEL.messageBuilder(SwapTier.class, 3, NetworkDirection.PLAY_TO_SERVER)
+                .encoder((message, buffer) -> buffer.writeBlockPos(message.anchor()).writeEnum(message.hand()))
+                .decoder(buffer -> new SwapTier(buffer.readBlockPos(), buffer.readEnum(InteractionHand.class)))
+                .consumerMainThread((message, context) -> {
+                    var player = context.get().getSender();
+                    if (player != null) {
+                        BeltInteractions.swapTier(player, message.anchor(), message.hand());
+                    }
+                })
+                .add();
     }
 
     public static void pickup(BlockPos anchor, long itemId) {
@@ -57,6 +68,10 @@ public final class BeltInteractionNetwork {
 
     public static void dig(BlockPos anchor, boolean held) {
         CHANNEL.sendToServer(new Dig(anchor, held));
+    }
+
+    public static void swapTier(BlockPos anchor, InteractionHand hand) {
+        CHANNEL.sendToServer(new SwapTier(anchor, hand));
     }
 
     public static void progress(ServerLevel level, BlockPos anchor, int breakerId, int stage) {
@@ -71,4 +86,6 @@ public final class BeltInteractionNetwork {
     private record Dig(BlockPos anchor, boolean held) {}
 
     private record Progress(BlockPos anchor, int breakerId, int stage) {}
+
+    private record SwapTier(BlockPos anchor, InteractionHand hand) {}
 }

@@ -30,6 +30,7 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.sounds.SoundSource;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 
@@ -67,6 +68,9 @@ public class ConveyorItem extends BlockItem {
         Player player = context.getPlayer();
         if (player == null) {
             return super.useOn(context);
+        }
+        if (context instanceof TierSwapContext) {
+            return replaceTier(context, player);
         }
 
         Level level = context.getLevel();
@@ -185,6 +189,45 @@ public class ConveyorItem extends BlockItem {
             player.displayClientMessage(Component.literal("No open belt port at the selected endpoints."), true);
         }
         return InteractionResult.FAIL;
+    }
+
+    @Nullable
+    public static ConveyorBlock replacementTier(ItemStack stack, BlockState current) {
+        return !stack.isEmpty() && stack.getItem() instanceof ConveyorItem item
+                && item.getBlock() instanceof ConveyorBlock replacement && current.getBlock() instanceof ConveyorBlock belt
+                && replacement.getTier() != belt.getTier() ? replacement : null;
+    }
+
+    public static boolean useForTierSwap(Player player, InteractionHand hand, BlockHitResult hit) {
+        // Use the normal item placement transaction so a canceled Forge event restores the block and held stack.
+        return player.getItemInHand(hand).useOn(new TierSwapContext(player, hand, hit)).consumesAction();
+    }
+
+    private static InteractionResult replaceTier(UseOnContext context, Player player) {
+        Level level = context.getLevel();
+        BlockPos anchor = context.getClickedPos();
+        BlockState current = level.getBlockState(anchor);
+        ItemStack held = context.getItemInHand();
+        ConveyorBlock replacement = replacementTier(held, current);
+        if (replacement == null || !(level.getBlockEntity(anchor) instanceof ConveyorBlockEntity belt)
+                || belt.getEndPos() == null) {
+            return InteractionResult.FAIL;
+        }
+
+        BlockState next = replacement.defaultBlockState().setValue(ConveyorBlock.FACING, current.getValue(ConveyorBlock.FACING));
+        if (!level.setBlock(anchor, next, Block.UPDATE_ALL)) {
+            return InteractionResult.FAIL;
+        }
+        if (!player.getAbilities().instabuild) {
+            held.shrink(1);
+        }
+        return InteractionResult.SUCCESS;
+    }
+
+    private static final class TierSwapContext extends UseOnContext {
+        private TierSwapContext(Player player, InteractionHand hand, BlockHitResult hit) {
+            super(player, hand, hit);
+        }
     }
 
     private static void playPlaceSound(Level level, BlockPos pos, BlockState state) {
