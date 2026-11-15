@@ -2,9 +2,11 @@ package art.arcane.satiscraftory.interaction;
 
 import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
+import art.arcane.satiscraftory.network.BeltInteractionNetwork;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -25,6 +27,7 @@ import java.util.WeakHashMap;
 @Mod.EventBusSubscriber(modid = Satiscraftory.MODID)
 public final class BeltInteractions {
     private static final int DIG_TIMEOUT_TICKS = 10;
+    private static final int PROGRESS_REFRESH_TICKS = 20;
     private static final Map<ServerPlayer, Dig> DIGGING = new WeakHashMap<>();
 
     private BeltInteractions() {}
@@ -48,12 +51,12 @@ public final class BeltInteractions {
 
     public static void dig(ServerPlayer player, BlockPos anchor, boolean held) {
         if (!held) {
-            DIGGING.remove(player);
+            stopDigging(player);
             return;
         }
         BeltTargeting.Hit hit = miningTarget(player, anchor);
         if (hit == null) {
-            DIGGING.remove(player);
+            stopDigging(player);
             return;
         }
         Dig dig = DIGGING.get(player);
@@ -62,7 +65,7 @@ public final class BeltInteractions {
             return;
         }
 
-        DIGGING.remove(player);
+        stopDigging(player);
         var event = ForgeHooks.onLeftClickBlock(player, anchor, aimedFace(player),
                 ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK);
         if (event.isCanceled() || event.getResult() == Event.Result.DENY || event.getUseItem() == Event.Result.DENY) {
@@ -90,34 +93,48 @@ public final class BeltInteractions {
         BlockPos anchor = dig.belt.getBlockPos();
         if (player.tickCount - dig.lastInputTick > DIG_TIMEOUT_TICKS
                 || !ItemStack.isSameItemSameTags(dig.tool, player.getMainHandItem())) {
-            DIGGING.remove(player);
+            stopDigging(player);
             return;
         }
         BeltTargeting.Hit hit = miningTarget(player, anchor);
         if (hit == null || hit.belt() != dig.belt) {
-            DIGGING.remove(player);
+            stopDigging(player);
             return;
         }
 
         var state = dig.belt.getBlockState();
         dig.progress += state.getDestroyProgress(player, player.level(), anchor);
         if (dig.progress >= 1.0F) {
-            DIGGING.remove(player);
+            stopDigging(player);
             breakBelt(player, hit);
+        } else if (dig.progress > 0.0F) {
+            int stage = Math.min(9, (int) (dig.progress * 10.0F));
+            if (stage != dig.stage || player.tickCount - dig.lastProgressTick >= PROGRESS_REFRESH_TICKS) {
+                dig.stage = stage;
+                dig.lastProgressTick = player.tickCount;
+                BeltInteractionNetwork.progress(player.serverLevel(), anchor, player.getId(), stage);
+            }
         }
     }
 
     @SubscribeEvent
     public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            DIGGING.remove(player);
+            stopDigging(player);
+        }
+    }
+
+    private static void stopDigging(ServerPlayer player) {
+        Dig dig = DIGGING.remove(player);
+        if (dig != null && dig.stage >= 0 && dig.belt.getLevel() instanceof ServerLevel level) {
+            BeltInteractionNetwork.progress(level, dig.belt.getBlockPos(), player.getId(), -1);
         }
     }
 
     private static void breakBelt(ServerPlayer player, BeltTargeting.Hit hit) {
         var belt = hit.belt();
         var state = belt.getBlockState();
-        if (player.gameMode.destroyBlock(belt.getBlockPos()) && belt.isRemoved()) {
+        if (belt.destroyAt(player, hit.location()) && belt.isRemoved()) {
             player.level().levelEvent(2001, BlockPos.containing(hit.location()), Block.getId(state));
         }
     }
@@ -148,6 +165,8 @@ public final class BeltInteractions {
         private final ItemStack tool;
         private int lastInputTick;
         private float progress;
+        private int stage = -1;
+        private int lastProgressTick;
 
         private Dig(ConveyorBlockEntity belt, ItemStack tool, int lastInputTick) {
             this.belt = belt;

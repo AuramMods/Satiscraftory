@@ -115,6 +115,8 @@ public class ConveyorBlockEntity extends BlockEntity {
     private boolean needsSync;
     private boolean urgentSyncPending;
     private transient long nextEndMarkerValidationTick = Long.MIN_VALUE;
+    @Nullable
+    private MiningImpact miningImpact;
 
     private transient long lastClientAppliedRevision = Long.MIN_VALUE;
     private transient long clientSnapshotGameTime = Long.MIN_VALUE;
@@ -188,6 +190,23 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
         removeLinkedEndMarkerAt(endPos);
     }
+
+    public boolean destroyAt(ServerPlayer player, Vec3 location) {
+        MiningImpact previous = miningImpact;
+        miningImpact = new MiningImpact(player, location);
+        try {
+            return player.gameMode.destroyBlock(worldPosition);
+        } finally {
+            miningImpact = previous;
+        }
+    }
+
+    @Nullable
+    public Vec3 miningImpact(Player player) {
+        return miningImpact != null && miningImpact.player() == player ? miningImpact.location() : null;
+    }
+
+    private record MiningImpact(Player player, Vec3 location) {}
 
     @Override
     public void invalidateCaps() {

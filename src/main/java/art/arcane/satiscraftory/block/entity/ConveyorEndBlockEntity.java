@@ -2,13 +2,18 @@ package art.arcane.satiscraftory.block.entity;
 
 import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.block.ConveyorBlock;
+import art.arcane.satiscraftory.data.route.BeltRoute;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
 
@@ -53,7 +58,16 @@ public class ConveyorEndBlockEntity extends BlockEntity {
         }
 
         BlockState masterState = level.getBlockState(master);
-        if (masterState.getBlock() instanceof ConveyorBlock) {
+        if (!(masterState.getBlock() instanceof ConveyorBlock)) {
+            return;
+        }
+        if (level instanceof ServerLevel serverLevel) {
+            var drops = Block.getDrops(masterState, serverLevel, master, level.getBlockEntity(master));
+            if (level.destroyBlock(master, false)) {
+                ConveyorBlock.popResourcesAt(serverLevel, Vec3.atBottomCenterOf(pos).add(0, BeltRoute.DECK_HEIGHT, 0), drops);
+                masterState.spawnAfterBreak(serverLevel, master, ItemStack.EMPTY, true);
+            }
+        } else {
             level.destroyBlock(master, true);
         }
     }

@@ -6,7 +6,13 @@ import art.arcane.satiscraftory.data.ConveyorTier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.stats.Stats;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
@@ -21,11 +27,14 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraftforge.client.extensions.common.IClientBlockExtensions;
 
+import javax.annotation.Nullable;
+import java.util.List;
 import java.util.function.Consumer;
 
 public class ConveyorBlock extends BaseEntityBlock {
@@ -93,6 +102,34 @@ public class ConveyorBlock extends BaseEntityBlock {
             return createTickerHelper(blockEntityType, Satiscraftory.CONVEYOR_BLOCK_ENTITY.get(), ConveyorBlockEntity::clientTick);
         }
         return createTickerHelper(blockEntityType, Satiscraftory.CONVEYOR_BLOCK_ENTITY.get(), ConveyorBlockEntity::serverTick);
+    }
+
+    @Override
+    public void playerDestroy(Level level, Player player, BlockPos pos, BlockState state,
+                              @Nullable BlockEntity blockEntity, ItemStack tool) {
+        Vec3 impact = blockEntity instanceof ConveyorBlockEntity belt ? belt.miningImpact(player) : null;
+        if (!(level instanceof ServerLevel serverLevel) || impact == null) {
+            super.playerDestroy(level, player, pos, state, blockEntity, tool);
+            return;
+        }
+
+        player.awardStat(Stats.BLOCK_MINED.get(this));
+        player.causeFoodExhaustion(0.005F);
+        popResourcesAt(serverLevel, impact, getDrops(state, serverLevel, pos, blockEntity, player, tool));
+        state.spawnAfterBreak(serverLevel, pos, tool, false);
+    }
+
+    public static void popResourcesAt(ServerLevel level, Vec3 location, List<ItemStack> drops) {
+        if (!level.getGameRules().getBoolean(GameRules.RULE_DOBLOCKDROPS) || level.restoringBlockSnapshots) {
+            return;
+        }
+        for (ItemStack drop : drops) {
+            if (!drop.isEmpty()) {
+                ItemEntity item = new ItemEntity(level, location.x, location.y + 0.05D, location.z, drop, 0, 0, 0);
+                item.setDefaultPickUpDelay();
+                level.addFreshEntity(item);
+            }
+        }
     }
 
     @Override

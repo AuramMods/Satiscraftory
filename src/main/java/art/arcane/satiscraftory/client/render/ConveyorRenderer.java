@@ -2,13 +2,16 @@ package art.arcane.satiscraftory.client.render;
 
 import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
+import art.arcane.satiscraftory.client.ConveyorMiningProgress;
 import art.arcane.satiscraftory.data.route.BeltRoute;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.SheetedDecalTextureGenerator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexMultiConsumer;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
@@ -19,6 +22,7 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -136,14 +140,19 @@ public class ConveyorRenderer implements BlockEntityRenderer<ConveyorBlockEntity
 
         BeltRoute route = blockEntity.getRoute();
 
-        VertexConsumer cutoutBuffer = bufferSource.getBuffer(RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS));
         Matrix4f pose = poseStack.last().pose();
         Matrix3f normal = poseStack.last().normal();
+        int stage = ConveyorMiningProgress.stageFor(blockEntity);
+        // Get the fixed crack buffer before the regular belt buffer, which flushes when its type changes.
+        VertexConsumer cracks = stage < 0 ? null : new SheetedDecalTextureGenerator(
+                bufferSource.getBuffer(ModelBakery.DESTROY_TYPES.get(stage)), pose, normal, 1.0F);
+        VertexConsumer cutout = bufferSource.getBuffer(RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS));
+        VertexConsumer consumer = cracks == null ? cutout : VertexMultiConsumer.create(cutout, cracks);
 
         for (ModelFace face : template.faces()) {
             renderRouteFace(
                     face,
-                    cutoutBuffer,
+                    consumer,
                     pose,
                     normal,
                     level,
