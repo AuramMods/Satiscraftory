@@ -3,6 +3,7 @@ package art.arcane.satiscraftory.block.entity;
 import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity.CargoHit;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity.SplineVisualItemEntity;
+import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity.SplineVisualItemEntity.BeltLocation;
 import art.arcane.satiscraftory.block.entity.ConveyorPrediction.RenderItem;
 import art.arcane.satiscraftory.client.SatiscraftoryClient;
 import art.arcane.satiscraftory.interaction.BeltTargeting;
@@ -23,12 +24,16 @@ import java.util.Set;
 final class ConveyorVisuals {
     private static final double MIN_CLIENT_CORRECTION_SLOTS_PER_TICK = 0.125D;
     private static final double CLIENT_CORRECTION_SPEED_FRACTION = 0.25D;
+    // Cargo models are at most half a block wide and deep. Move their whole footprint past the face.
+    private static final double CONTAINER_TRAVEL_DISTANCE = 3.0D / 8.0D;
     private static final int HANDOFF_GRACE_TICKS = 3;
 
     private static long nextClientSnapshotOrder;
 
     private final ConveyorBlockEntity belt;
     private final Map<Long, SplineVisualItemEntity> items = new HashMap<>();
+    private final Set<Long> containerArrivals = new HashSet<>();
+    private final Set<SplineVisualItemEntity> containerDepartures = new HashSet<>();
     private long lastClientAppliedRevision = Long.MIN_VALUE;
     private long clientSnapshotGameTime = Long.MIN_VALUE;
     private long clientSnapshotOrder;
@@ -41,7 +46,7 @@ final class ConveyorVisuals {
         return revision >= lastClientAppliedRevision;
     }
 
-    void applySnapshot(long gameTime, long revision, long[] pickedUpItems) {
+    void applySnapshot(long gameTime, long revision, long[] pickedUpItems, long[] arrivals, long[] departures) {
         lastClientAppliedRevision = revision;
         clientSnapshotGameTime = gameTime;
         clientSnapshotOrder = ++nextClientSnapshotOrder;
@@ -49,6 +54,15 @@ final class ConveyorVisuals {
             SplineVisualItemEntity visual = items.remove(itemId);
             if (visual != null) {
                 visual.discard();
+            }
+        }
+        for (long itemId : arrivals) {
+            containerArrivals.add(itemId);
+        }
+        for (long itemId : departures) {
+            SplineVisualItemEntity visual = items.remove(itemId);
+            if (visual != null && visual.isAlive()) {
+                containerDepartures.add(visual);
             }
         }
     }
@@ -78,7 +92,7 @@ final class ConveyorVisuals {
                 slotsPerTick * CLIENT_CORRECTION_SPEED_FRACTION);
 
         Set<Long> activeVisualKeys = new HashSet<>();
-        double nextVisualLimit = belt.bufferSize();
+        double nextVisualLimit = advanceContainerDepartures(now, slotsPerTick, maxCorrection);
         for (RenderItem item : prediction) {
             if (item.stack().isEmpty()) {
                 continue;
@@ -94,6 +108,7 @@ final class ConveyorVisuals {
         }
 
         finishDepartingVisuals(activeVisualKeys, nextBelt != null, now, slotsPerTick, maxCorrection);
+        containerArrivals.clear();
     }
 
     @Nullable
@@ -129,7 +144,10 @@ final class ConveyorVisuals {
         if (visual == null || !visual.isAlive()) {
             double startUnits = item.slotUnits() <= Math.max(1.0D, slotsPerTick + maxCorrection) ? 0.0D : item.slotUnits();
             startUnits = Mth.clamp(startUnits, 0.0D, Math.max(0.0D, limit));
-            Vec3 position = belt.computeVisualPositionForSlotUnits(startUnits);
+            if (startUnits == 0.0D && containerArrivals.contains(item.visualKey())) {
+                startUnits = -containerTravelInSlots();
+            }
+            Vec3 position = new BeltLocation(belt, startUnits / belt.bufferSize()).position();
             visual = new SplineVisualItemEntity(belt, level, position, item.stack(), startUnits);
             if (!SatiscraftoryClient.addConveyorItemVisual(visual)) {
                 items.remove(item.visualKey());
@@ -144,6 +162,34 @@ final class ConveyorVisuals {
         visual.departureTicks = 0;
         visual.advanceTowards(item.slotUnits(), limit, now, slotsPerTick, maxCorrection);
         return visual;
+    }
+
+    private double containerTravelInSlots() {
+        return CONTAINER_TRAVEL_DISTANCE / belt.visualSlotLength();
+    }
+
+    private double advanceContainerDepartures(long now, double slotsPerTick, double maxCorrection) {
+        double edge = belt.bufferSize();
+        if (containerDepartures.isEmpty()) {
+            return edge;
+        }
+
+        double end = edge + containerTravelInSlots();
+        double nextVisualLimit = edge;
+        var iterator = containerDepartures.iterator();
+        while (iterator.hasNext()) {
+            SplineVisualItemEntity visual = iterator.next();
+            if (!visual.isAlive() || visual.slotUnits >= end) {
+                visual.discard();
+                iterator.remove();
+                continue;
+            }
+            // Catch up to the outlet if the snapshot arrived early, then continue at belt speed inside.
+            double target = Math.max(edge, visual.slotUnits + slotsPerTick);
+            visual.advanceTowards(target, end, now, slotsPerTick, maxCorrection);
+            nextVisualLimit = Math.min(nextVisualLimit, visual.slotUnits - 1.0D);
+        }
+        return nextVisualLimit;
     }
 
     private void finishDepartingVisuals(Set<Long> activeVisualKeys, boolean directOutput, long now,
@@ -175,7 +221,12 @@ final class ConveyorVisuals {
         for (SplineVisualItemEntity visual : items.values()) {
             visual.discard();
         }
+        for (SplineVisualItemEntity visual : containerDepartures) {
+            visual.discard();
+        }
         items.clear();
+        containerDepartures.clear();
+        containerArrivals.clear();
     }
 
     @Nullable
@@ -183,10 +234,11 @@ final class ConveyorVisuals {
         CargoHit nearest = null;
         double closest = ray.from().distanceToSqr(ray.to());
         for (var entry : items.entrySet()) {
-            if (entry.getKey() <= 0L || !entry.getValue().isAlive()) {
+            SplineVisualItemEntity visual = entry.getValue();
+            if (entry.getKey() <= 0L || !visual.isAlive() || visual.locationOnBelt(partialTick).progress() < 0.0D) {
                 continue;
             }
-            Vec3 hit = SatiscraftoryClient.clipConveyorItem(entry.getValue(), ray, partialTick);
+            Vec3 hit = SatiscraftoryClient.clipConveyorItem(visual, ray, partialTick);
             if (hit != null && ray.from().distanceToSqr(hit) < closest) {
                 nearest = new CargoHit(belt, entry.getKey(), hit);
                 closest = ray.from().distanceToSqr(hit);

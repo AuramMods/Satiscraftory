@@ -14,16 +14,21 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.items.IItemHandler;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.List;
 
 /** Runs the belt clock, transfers cargo between ports, and exposes the inventory capability. */
 final class ConveyorTransport {
+    static final String CONTAINER_ARRIVALS_TAG = "container_arrivals";
+    static final String CONTAINER_DEPARTURES_TAG = "container_departures";
     private static final String STEP_ACCUMULATOR_TAG = "step_accumulator";
     private static final String DIRECT_INPUT_TAG = "direct_input";
     private static final String BLOCKED_OUTPUT_ITEM_TAG = "blocked_output_item";
 
     private final ConveyorBlockEntity belt;
     private final ConveyorBuffer buffer;
+    private final List<Long> containerArrivals = new ArrayList<>();
+    private final List<Long> containerDepartures = new ArrayList<>();
     @Nullable
     private BlockPos directInputPos;
     private long lastAccumulatorTick = Long.MIN_VALUE;
@@ -53,6 +58,20 @@ final class ConveyorTransport {
         lastAccumulatorTick = Long.MIN_VALUE;
         directInputPos = tag.contains(DIRECT_INPUT_TAG, Tag.TAG_COMPOUND)
                 ? NbtUtils.readBlockPos(tag.getCompound(DIRECT_INPUT_TAG)) : null;
+    }
+
+    void writeContainerTransfers(CompoundTag tag) {
+        if (!containerArrivals.isEmpty()) {
+            tag.putLongArray(CONTAINER_ARRIVALS_TAG, containerArrivals);
+        }
+        if (!containerDepartures.isEmpty()) {
+            tag.putLongArray(CONTAINER_DEPARTURES_TAG, containerDepartures);
+        }
+    }
+
+    void clearContainerTransfers() {
+        containerArrivals.clear();
+        containerDepartures.clear();
     }
 
     void tick(Level level) {
@@ -174,7 +193,9 @@ final class ConveyorTransport {
         }
 
         ItemStack remaining = ItemTransfers.insert(outputHandler, transfer.stack, false);
-        if (!remaining.isEmpty()) {
+        if (remaining.isEmpty()) {
+            containerDepartures.add(transfer.itemId);
+        } else {
             BlockPos outputPos = resolveOutputTargetPos();
             Containers.dropItemStack(level,
                     outputPos.getX() + 0.5D,
@@ -210,7 +231,7 @@ final class ConveyorTransport {
 
             ItemStack single = simulated.copy();
             single.setCount(1);
-            if (!enqueueItem(single, true)) {
+            if (!enqueueContainerItem(single, true)) {
                 return false;
             }
 
@@ -221,7 +242,7 @@ final class ConveyorTransport {
 
             ItemStack extractedSingle = extracted.copy();
             extractedSingle.setCount(1);
-            return enqueueItem(extractedSingle, false);
+            return enqueueContainerItem(extractedSingle, false);
         }
 
         return false;
@@ -302,7 +323,7 @@ final class ConveyorTransport {
         return ItemTransfers.handler(blockEntity, outputSide.getOpposite());
     }
 
-    private boolean enqueueItem(ItemStack stack, boolean simulate) {
+    private boolean enqueueContainerItem(ItemStack stack, boolean simulate) {
         if (stack.isEmpty()) {
             return true;
         }
@@ -317,10 +338,19 @@ final class ConveyorTransport {
         }
 
         if (!simulate) {
-            buffer.appendItem(slot, stack, buffer.allocateItemId());
+            appendNewItem(slot, stack, true);
         }
 
         return true;
+    }
+
+    private void appendNewItem(int slot, ItemStack stack, boolean fromContainer) {
+        long itemId = buffer.allocateItemId();
+        buffer.appendItem(slot, stack, itemId);
+        if (fromContainer) {
+            containerArrivals.add(itemId);
+            belt.requestUrgentSync();
+        }
     }
 
     private ItemStack insertFromCapability(@Nullable Direction side, int slot, ItemStack stack, boolean simulate) {
@@ -338,7 +368,7 @@ final class ConveyorTransport {
         }
 
         if (!simulate) {
-            buffer.appendItem(tailSlot, stack, buffer.allocateItemId());
+            appendNewItem(tailSlot, stack, side != null && getInputContainerHandler() != null);
         }
 
         ItemStack leftover = stack.copy();

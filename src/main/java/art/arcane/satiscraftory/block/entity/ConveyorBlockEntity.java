@@ -119,7 +119,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         return endpoints.getVisualRoute();
     }
 
-    private double visualSlotLength() {
+    double visualSlotLength() {
         return getVisualRoute().length() / buffer.size();
     }
 
@@ -233,7 +233,9 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         if (isClient) {
             buffer.sanitizeClientLoadedState();
-            visuals.applySnapshot(level.getGameTime(), syncRevision, tag.getLongArray(PICKED_UP_ITEMS_TAG));
+            visuals.applySnapshot(level.getGameTime(), syncRevision, tag.getLongArray(PICKED_UP_ITEMS_TAG),
+                    tag.getLongArray(ConveyorTransport.CONTAINER_ARRIVALS_TAG),
+                    tag.getLongArray(ConveyorTransport.CONTAINER_DEPARTURES_TAG));
         }
 
         rebuildCapabilities();
@@ -248,6 +250,7 @@ public class ConveyorBlockEntity extends BlockEntity {
     @Override
     public CompoundTag getUpdateTag() {
         CompoundTag tag = saveWithoutMetadata();
+        transport.writeContainerTransfers(tag);
         if (!pickedUpItems.isEmpty()) {
             tag.putLongArray(PICKED_UP_ITEMS_TAG, pickedUpItems.stream().mapToLong(Long::longValue).toArray());
         }
@@ -341,6 +344,8 @@ public class ConveyorBlockEntity extends BlockEntity {
         if (needsSync && syncDirtyItems()) {
             needsSync = false;
         }
+        // Transfer cues only apply to observers of this tick's snapshot.
+        transport.clearContainerTransfers();
         urgentSyncPending = false;
     }
 
@@ -626,7 +631,19 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         public record BeltLocation(ConveyorBlockEntity belt, double progress) {
             public Vec3 position() {
-                return belt.deckPosition(progress);
+                Vec3 deck = belt.deckPosition(progress);
+                if (progress < 0.0D) {
+                    return extendPort(deck, belt.getInputSide(), -progress);
+                }
+                if (progress > 1.0D) {
+                    return extendPort(deck, belt.getOutputSide(), progress - 1.0D);
+                }
+                return deck;
+            }
+
+            private Vec3 extendPort(Vec3 deck, Direction side, double extraProgress) {
+                double distance = extraProgress * belt.getVisualRoute().length();
+                return deck.add(side.getStepX() * distance, 0.0D, side.getStepZ() * distance);
             }
 
             public Vec3 direction() {
