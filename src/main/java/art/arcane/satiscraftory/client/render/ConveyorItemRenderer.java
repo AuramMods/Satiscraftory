@@ -30,6 +30,8 @@ import java.util.WeakHashMap;
 
 public final class ConveyorItemRenderer extends EntityRenderer<SplineVisualItemEntity> {
     private static final double CONTACT_CLEARANCE = 1.0D / 1024.0D;
+    private static final double MAX_CARGO_FOOTPRINT = 0.5D;
+    private static final double SLOT_FOOTPRINT_FRACTION = 0.7D;
     private static final double PICK_PADDING = 1.0D / 64.0D;
     private static final Map<SplineVisualItemEntity, CachedModel> RESTING_MODELS = new WeakHashMap<>();
 
@@ -53,11 +55,13 @@ public final class ConveyorItemRenderer extends EntityRenderer<SplineVisualItemE
                        MultiBufferSource buffers, int packedLight) {
         ItemStack stack = visual.getItem();
         BakedModel model = itemRenderer.getModel(stack, visual.level(), null, visual.getId());
-        RestingModel resting = restingModel(itemRenderer, visual, stack, model);
+        var location = visual.locationOnBelt(partialTick);
+        RestingModel resting = restingModel(itemRenderer, visual, stack, model).fitToSlot(location.slotLength());
 
         poseStack.pushPose();
-        poseStack.mulPose(beltRotation(visual.locationOnBelt(partialTick).direction()));
+        poseStack.mulPose(beltRotation(location.direction()));
         poseStack.translate(resting.offset.x, resting.offset.y, resting.offset.z);
+        poseStack.scale(resting.scale, resting.scale, resting.scale);
         poseStack.mulPose(resting.rotation);
         itemRenderer.render(stack, ItemDisplayContext.GROUND, false, poseStack, buffers,
                 packedLight, OverlayTexture.NO_OVERLAY, model);
@@ -74,8 +78,8 @@ public final class ConveyorItemRenderer extends EntityRenderer<SplineVisualItemE
         ItemRenderer renderer = Minecraft.getInstance().getItemRenderer();
         ItemStack stack = visual.getItem();
         BakedModel model = renderer.getModel(stack, visual.level(), null, visual.getId());
-        RestingModel resting = restingModel(renderer, visual, stack, model);
         var location = visual.locationOnBelt(partialTick);
+        RestingModel resting = restingModel(renderer, visual, stack, model).fitToSlot(location.slotLength());
         Vec3 origin = location.position();
         Quaternionf rotation = beltRotation(location.direction());
         Quaternionf inverse = new Quaternionf(rotation).conjugate();
@@ -132,12 +136,27 @@ public final class ConveyorItemRenderer extends EntityRenderer<SplineVisualItemE
 
         Vec3 center = bounds.getCenter();
         Vec3 offset = new Vec3(-center.x, CONTACT_CLEARANCE - bounds.minY, -center.z);
-        return new RestingModel(rotation, offset, bounds.move(offset));
+        return new RestingModel(rotation, offset, bounds.move(offset), 1.0F);
     }
 
     private record CachedModel(ItemStack stack, BakedModel model, RestingModel resting) {}
 
-    private record RestingModel(Quaternionf rotation, Vec3 offset, AABB bounds) {}
+    private record RestingModel(Quaternionf rotation, Vec3 offset, AABB bounds, float scale) {
+        RestingModel fitToSlot(double slotLength) {
+            // Leave room for corners, including on over-capacity belts that are still draining old slots.
+            double footprint = Math.min(MAX_CARGO_FOOTPRINT, slotLength * SLOT_FOOTPRINT_FRACTION);
+            double size = Math.max(bounds.getXsize(), bounds.getZsize());
+            if (size <= footprint) {
+                return this;
+            }
+
+            float fit = (float) (footprint / size);
+            double lift = CONTACT_CLEARANCE * (1.0D - fit);
+            AABB fittedBounds = new AABB(bounds.minX * fit, bounds.minY * fit + lift, bounds.minZ * fit,
+                    bounds.maxX * fit, bounds.maxY * fit + lift, bounds.maxZ * fit);
+            return new RestingModel(rotation, offset.scale(fit).add(0.0D, lift, 0.0D), fittedBounds, fit);
+        }
+    }
 
     private static final class ModelBounds {
         private final Vector3f min = new Vector3f(Float.POSITIVE_INFINITY);

@@ -113,7 +113,7 @@ final class ConveyorBuffer {
 
     boolean resizeTo(int desiredSlots) {
         requestedSlots = desiredSlots;
-        // Rounded routes may be shorter in existing saves. Drain the old slots before shrinking.
+        // Keep any excess cargo in existing slots until the belt drains enough to shrink.
         if (desiredSlots > bufferSlots || (desiredSlots < bufferSlots && countNonEmptySlots() <= desiredSlots)) {
             resizeBuffer(desiredSlots);
             return true;

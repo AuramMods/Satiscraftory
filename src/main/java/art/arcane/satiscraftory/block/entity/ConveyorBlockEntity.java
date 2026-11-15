@@ -44,7 +44,8 @@ import java.util.Map;
 import java.util.Set;
 
 public class ConveyorBlockEntity extends BlockEntity {
-    private static final int SLOTS_PER_BLOCK = 3;
+    private static final double MIN_CARGO_SPACING = 0.75D;
+    private static final int LEGACY_SLOTS_PER_BLOCK = 3;
     private static final int DEFAULT_TRAVEL_TICKS_PER_BLOCK = 60;
     private static final double CLIENT_POSITION_CORRECTION_GAIN = 0.25D;
     private static final double VISUAL_RANGE_BLOCKS = 16.0D;
@@ -58,7 +59,7 @@ public class ConveyorBlockEntity extends BlockEntity {
     private int beltLengthBlocks = 1;
     private int travelTicksPerBlock = DEFAULT_TRAVEL_TICKS_PER_BLOCK;
 
-    private final ConveyorBuffer buffer = new ConveyorBuffer(SLOTS_PER_BLOCK, this::markDirtyForSync);
+    private final ConveyorBuffer buffer = new ConveyorBuffer(1, this::markDirtyForSync);
 
     private LazyOptional<IItemHandler> unsidedCapability = LazyOptional.empty();
     private final Map<Direction, LazyOptional<IItemHandler>> sidedCapabilities = new EnumMap<>(Direction.class);
@@ -116,6 +117,10 @@ public class ConveyorBlockEntity extends BlockEntity {
 
     public BeltRoute getVisualRoute() {
         return endpoints.getVisualRoute();
+    }
+
+    private double visualSlotLength() {
+        return getVisualRoute().length() / buffer.size();
     }
 
     public void setEndData(BlockPos endPos, Direction endFacing, BeltRouteMode mode) {
@@ -210,7 +215,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         }
 
         beltLengthBlocks = Math.max(1, tag.getInt(BELT_LENGTH_BLOCKS_TAG));
-        buffer.load(tag, desiredBufferSlots());
+        buffer.load(tag, beltLengthBlocks * LEGACY_SLOTS_PER_BLOCK);
         transport.load(tag);
         travelTicksPerBlock = tag.contains(TRAVEL_TICKS_PER_BLOCK_TAG, Tag.TAG_INT)
                 ? Math.max(1, tag.getInt(TRAVEL_TICKS_PER_BLOCK_TAG))
@@ -386,20 +391,13 @@ public class ConveyorBlockEntity extends BlockEntity {
         return false;
     }
 
-    private int desiredBufferSlots() {
-        return beltLengthBlocks * SLOTS_PER_BLOCK;
-    }
-
     private boolean recalculateLengthAndResize() {
-        int computedLength = getEndPos() == null ? 1 : getRoute().lengthInBlocks();
-
-        boolean changed = false;
-        if (beltLengthBlocks != computedLength) {
-            beltLengthBlocks = computedLength;
-            changed = true;
-        }
-
-        return buffer.resizeTo(desiredBufferSlots()) || changed;
+        BeltRoute route = getEndPos() == null ? null : getRoute();
+        int computedLength = route == null ? 1 : route.lengthInBlocks();
+        int desiredSlots = route == null ? 1 : Math.max(1, (int) Math.floor(route.length() / MIN_CARGO_SPACING));
+        boolean lengthChanged = beltLengthBlocks != computedLength;
+        beltLengthBlocks = computedLength;
+        return buffer.resizeTo(desiredSlots) || lengthChanged;
     }
 
     private long getClientSyncIntervalTicks() {
@@ -634,6 +632,10 @@ public class ConveyorBlockEntity extends BlockEntity {
             public Vec3 direction() {
                 return belt.getVisualRoute().surfaceDirection(progress);
             }
+
+            public double slotLength() {
+                return belt.visualSlotLength();
+            }
         }
 
         boolean canEnterNextBelt(long now) {
@@ -643,9 +645,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         void enterBelt(ConveyorBlockEntity next) {
             incomingFrom = conveyor;
             // Negative progress on the new belt measures the distance remaining on the old one.
-            double incomingSlotLength = conveyor.getVisualRoute().length() / conveyor.buffer.size();
-            double nextSlotLength = next.getVisualRoute().length() / next.buffer.size();
-            slotsPerIncomingSlot = incomingSlotLength / nextSlotLength;
+            slotsPerIncomingSlot = conveyor.visualSlotLength() / next.visualSlotLength();
             previousSlotUnits = (previousSlotUnits - conveyor.buffer.size()) * slotsPerIncomingSlot;
             slotUnits = (slotUnits - conveyor.buffer.size()) * slotsPerIncomingSlot;
             conveyor = next;
