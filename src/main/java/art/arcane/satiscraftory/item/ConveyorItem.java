@@ -71,25 +71,26 @@ public class ConveyorItem extends BlockItem {
 
         Level level = context.getLevel();
         PlacementState state = readPlacementState(player);
+        BlockPos clickedPos = context.getClickedPos();
+        Direction clickedFace = context.getClickedFace();
+        boolean targetingContainer = isShiftTargetingContainerFace(player, clickedPos, clickedFace);
 
         if (state == null) {
             BlockPos startPos;
             Direction startFacing = null;
             if (player.isShiftKeyDown()) {
-                Direction face = context.getClickedFace();
-                BlockPos containerPos = context.getClickedPos();
-                if (!isContainerInputFace(level, containerPos, face)) {
+                if (!targetingContainer) {
                     return InteractionResult.PASS;
                 }
 
-                startPos = containerPos.relative(face);
+                startPos = clickedPos.relative(clickedFace);
                 if (!canPlaceBeltStart(level, startPos)) {
                     if (!level.isClientSide) {
                         player.displayClientMessage(Component.literal("Belt start is blocked: " + formatPos(startPos)), true);
                     }
                     return InteractionResult.FAIL;
                 }
-                startFacing = face;
+                startFacing = clickedFace;
             } else {
                 startPos = resolvePlacementPos(context);
             }
@@ -116,11 +117,12 @@ public class ConveyorItem extends BlockItem {
         }
 
         BlockPos startPos = state.startPos;
-        BlockPos selectedPos = resolvePlacementPos(context);
+        BlockPos selectedPos = targetingContainer ? clickedPos.relative(clickedFace) : resolvePlacementPos(context);
         boolean blockedStart = !canPlaceBeltStart(level, startPos);
 
         Direction startFacing = state.resolveStartFacing(level, selectedPos, player.getDirection());
-        Direction endFacing = state.resolveEndFacing(level, selectedPos, startFacing, player.getDirection());
+        Direction endFacing = state.resolveEndFacing(level, selectedPos, startFacing, player.getDirection(),
+                targetingContainer ? clickedFace : null);
         BeltRoute route = state.mode.create(startPos, startFacing, selectedPos, endFacing);
         int estimatedLength = route.lengthInBlocks();
         boolean overMaxLength = estimatedLength > MAX_BELT_LENGTH_BLOCKS;
@@ -200,11 +202,11 @@ public class ConveyorItem extends BlockItem {
         return level.getBlockState(pos).canBeReplaced();
     }
 
-    public static boolean isContainerInputFace(Level level, BlockPos pos, Direction face) {
-        if (!face.getAxis().isHorizontal()) {
+    public static boolean isShiftTargetingContainerFace(Player player, BlockPos pos, Direction face) {
+        if (!player.isShiftKeyDown() || !face.getAxis().isHorizontal()) {
             return false;
         }
-        BlockEntity entity = level.getBlockEntity(pos);
+        BlockEntity entity = player.level().getBlockEntity(pos);
         if (entity == null || entity instanceof ConveyorBlockEntity
                 || entity instanceof SplitterBlockEntity || entity instanceof MergerBlockEntity) {
             return false;
@@ -393,7 +395,12 @@ public class ConveyorItem extends BlockItem {
             return startFacing != null ? startFacing : ConveyorItem.resolveStartFacing(level, startPos, endPos, fallback);
         }
 
-        public Direction resolveEndFacing(Level level, BlockPos endPos, Direction resolvedStartFacing, Direction fallback) {
+        public Direction resolveEndFacing(Level level, BlockPos endPos, Direction resolvedStartFacing,
+                                          Direction fallback, @Nullable Direction containerFace) {
+            if (containerFace != null) {
+                return containerFace.getOpposite();
+            }
+
             boolean singleBlock = mode == BeltRouteMode.STRAIGHT && startPos.equals(endPos);
             Direction preferred = singleBlock ? resolvedStartFacing : resolveDominantFacing(startPos, endPos, fallback);
             Direction excluded = singleBlock ? resolvedStartFacing.getOpposite() : null;

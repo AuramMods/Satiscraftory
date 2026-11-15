@@ -61,7 +61,9 @@ public final class ConveyorPlacementPreview {
             return;
         }
 
-        if (player.isShiftKeyDown()) {
+        boolean targetingContainer = ConveyorItem.isShiftTargetingContainerFace(player,
+                blockHit.getBlockPos(), blockHit.getDirection());
+        if (targetingContainer) {
             renderContainerFace(event, minecraft, level, player, blockHit);
         }
 
@@ -71,9 +73,11 @@ public final class ConveyorPlacementPreview {
         }
         BlockPos startPos = placement.startPos();
 
-        BlockPos previewEndPos = ConveyorItem.resolvePreviewEndPos(level, blockHit.getBlockPos(), blockHit.getDirection());
+        BlockPos previewEndPos = targetingContainer ? blockHit.getBlockPos().relative(blockHit.getDirection())
+                : ConveyorItem.resolvePreviewEndPos(level, blockHit.getBlockPos(), blockHit.getDirection());
         Direction startFacing = placement.resolveStartFacing(level, previewEndPos, player.getDirection());
-        Direction endFacing = placement.resolveEndFacing(level, previewEndPos, startFacing, player.getDirection());
+        Direction endFacing = placement.resolveEndFacing(level, previewEndPos, startFacing, player.getDirection(),
+                targetingContainer ? blockHit.getDirection() : null);
         PreviewKey key = new PreviewKey(startPos, startFacing, previewEndPos, endFacing, placement.mode());
         if (!key.equals(previewKey)) {
             previewRoute = key.mode().create(startPos, startFacing, previewEndPos, endFacing);
@@ -117,8 +121,7 @@ public final class ConveyorPlacementPreview {
                                             LocalPlayer player, BlockHitResult target) {
         BlockPos pos = target.getBlockPos();
         Direction face = target.getDirection();
-        if (!ConveyorItem.isContainerInputFace(level, pos, face)
-                || !ConveyorItem.canPlaceBeltStart(level, pos.relative(face))) {
+        if (!ConveyorItem.canPlaceBeltStart(level, pos.relative(face))) {
             return;
         }
 
