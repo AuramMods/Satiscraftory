@@ -56,10 +56,10 @@ public class MergerBlockEntity extends BlockEntity {
         ItemStack single = bufferStack.copy();
         single.setCount(1);
 
-        if (!insertIntoHandler(outputHandler, single, true).isEmpty()) {
+        if (!ItemTransfers.insert(outputHandler, single, true).isEmpty()) {
             return;
         }
-        if (!insertIntoHandler(outputHandler, single, false).isEmpty()) {
+        if (!ItemTransfers.insert(outputHandler, single, false).isEmpty()) {
             return;
         }
 
@@ -80,21 +80,7 @@ public class MergerBlockEntity extends BlockEntity {
             return null;
         }
 
-        Direction sideOnTarget = outputSide.getOpposite();
-        LazyOptional<IItemHandler> sidedHandler = target.getCapability(ForgeCapabilities.ITEM_HANDLER, sideOnTarget);
-        if (sidedHandler.isPresent()) {
-            return sidedHandler.orElse(null);
-        }
-
-        return target.getCapability(ForgeCapabilities.ITEM_HANDLER, null).orElse(null);
-    }
-
-    private static ItemStack insertIntoHandler(IItemHandler handler, ItemStack stack, boolean simulate) {
-        ItemStack remaining = stack.copy();
-        for (int slot = 0; slot < handler.getSlots() && !remaining.isEmpty(); slot++) {
-            remaining = handler.insertItem(slot, remaining, simulate);
-        }
-        return remaining;
+        return ItemTransfers.handler(target, outputSide.getOpposite());
     }
 
     public void dropContents(Level level, BlockPos pos) {
