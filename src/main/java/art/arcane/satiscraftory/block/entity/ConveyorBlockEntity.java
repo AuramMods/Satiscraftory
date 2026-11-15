@@ -58,6 +58,9 @@ public class ConveyorBlockEntity extends BlockEntity {
     private static final int MAX_CLIENT_PREDICTION_STEPS = 256;
     private static final double MIN_CLIENT_CORRECTION_SLOTS_PER_TICK = 0.125D;
     private static final double CLIENT_CORRECTION_SPEED_FRACTION = 0.25D;
+    private static final double CLIENT_POSITION_CORRECTION_GAIN = 0.25D;
+    private static final double CLIENT_COAST_TICKS = 3.0D;
+    private static final double MAX_CLIENT_COAST_SLOTS = 3.0D;
     private static final double VISUAL_RANGE_BLOCKS = 16.0D;
     private static final double ITEM_Y_OFFSET = 0.08D;
     private static final int HANDOFF_GRACE_TICKS = 3;
@@ -416,7 +419,8 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         // Sample the live queue without projecting transfers beyond the current partial step.
         double partialProgress = stepAccumulator - Math.floor(stepAccumulator);
-        List<PredictedRenderItem> drops = interpolateRenderItems(queue, getOutputContainerHandler(), partialProgress);
+        boolean outputOpen = canPredictOutputDeparture(queue.get(0), 0.0D);
+        List<PredictedRenderItem> drops = interpolateRenderItems(queue, outputOpen, partialProgress, 0.0D);
 
         for (int slot = 0; slot < bufferSlots; slot++) {
             inventory.setStackInSlot(slot, ItemStack.EMPTY);
@@ -493,13 +497,19 @@ public class ConveyorBlockEntity extends BlockEntity {
                 slotsPerTick * CLIENT_CORRECTION_SPEED_FRACTION);
 
         Set<Long> activeVisualKeys = new HashSet<>();
+        double nextVisualLimit = bufferSlots;
         for (PredictedRenderItem item : prediction) {
             if (item.stack.isEmpty()) {
                 continue;
             }
 
             activeVisualKeys.add(item.visualKey);
-            updateClientVisual(item, previousBelt, nextBelt, now, slotsPerTick, maxCorrection);
+            double limit = Math.min(nextVisualLimit, item.maxSlotUnits);
+            SplineVisualItemEntity visual = updateClientVisual(item, previousBelt, nextBelt, now,
+                    slotsPerTick, maxCorrection, limit);
+            if (visual != null) {
+                nextVisualLimit = visual.slotUnits - 1.0D;
+            }
         }
 
         finishDepartingVisuals(activeVisualKeys, nextBelt != null, now, slotsPerTick, maxCorrection);
@@ -529,46 +539,53 @@ public class ConveyorBlockEntity extends BlockEntity {
             return List.of();
         }
 
-        double projectedAccumulator = Math.max(0.0D, stepAccumulator + (elapsedTicks * getStepsPerTick()));
+        double slotsPerTick = getStepsPerTick();
+        double projectedAccumulator = Math.max(0.0D, stepAccumulator + (elapsedTicks * slotsPerTick));
         int projectedWholeSteps = (int) Math.floor(projectedAccumulator);
         int simulatedWholeSteps = Math.min(projectedWholeSteps, getMaxClientPredictionSteps());
         double partialProgress = projectedWholeSteps > simulatedWholeSteps
                 ? 0.0D
                 : clamp(projectedAccumulator - projectedWholeSteps, 0.0D, 1.0D);
 
-        IItemHandler predictedOutput = getOutputContainerHandler();
+        double coastSlots = Math.min(MAX_CLIENT_COAST_SLOTS, slotsPerTick * CLIENT_COAST_TICKS);
+        boolean outputOpen = canPredictOutputDeparture(queue.get(0), simulatedWholeSteps + partialProgress + coastSlots);
         for (int step = 0; step < simulatedWholeSteps; step++) {
-            if (!simulateRenderSubStep(queue, predictedOutput)) {
+            if (!simulateRenderSubStep(queue, outputOpen)) {
                 break;
             }
         }
 
-        return interpolateRenderItems(queue, predictedOutput, partialProgress);
+        return interpolateRenderItems(queue, outputOpen, partialProgress, coastSlots);
     }
 
     private List<PredictedRenderItem> interpolateRenderItems(List<PredictedQueueItem> queue,
-                                                            @Nullable IItemHandler predictedOutput,
-                                                            double partialProgress) {
+                                                            boolean outputOpen, double partialProgress, double coastSlots) {
         List<PredictedQueueItem> previewQueue = copyRenderQueue(queue);
-        simulateRenderSubStep(previewQueue, predictedOutput);
+        simulateRenderSubStep(previewQueue, outputOpen);
 
         List<PredictedRenderItem> renderedItems = new ArrayList<>(queue.size());
+        int headStop = outputOpen ? bufferSlots : bufferSlots - 1;
         for (int i = 0; i < queue.size(); i++) {
             PredictedQueueItem item = queue.get(i);
             // The first slot starts on the input edge. A departing head advances to the output edge.
             double slotUnits = Mth.lerp(partialProgress, item.position, previewQueue.get(i).position);
-            renderedItems.add(new PredictedRenderItem(item.visualKey, item.stack, slotUnits));
+            double maxSlotUnits = Math.min(slotUnits + coastSlots, headStop - i);
+            renderedItems.add(new PredictedRenderItem(item.visualKey, item.stack, slotUnits, maxSlotUnits));
         }
 
         return renderedItems;
     }
 
-    private boolean simulateRenderSubStep(List<PredictedQueueItem> queue, @Nullable IItemHandler predictedOutput) {
+    private boolean canPredictOutputDeparture(PredictedQueueItem head, double projectedTravel) {
+        // A receiving inventory on the client can look empty even when the server sees a jam.
+        return head.position + projectedTravel >= bufferSlots - 1 && head.visualKey != blockedOutputItemId
+                && canInsertHead(getOutputContainerHandler(), head.stack);
+    }
+
+    private boolean simulateRenderSubStep(List<PredictedQueueItem> queue, boolean outputOpen) {
         PredictedQueueItem head = queue.get(0);
-        boolean reachedEdge = head.position == bufferSlots - 1 && head.visualKey != blockedOutputItemId
-                && canInsertHead(predictedOutput, head.stack);
+        boolean reachedEdge = head.position == bufferSlots - 1 && outputOpen;
         if (reachedEdge) {
-            // A receiving inventory on the client can look empty even when the server sees a jam.
             // Hold the same item at the edge until a server snapshot confirms its departure.
             head.position = bufferSlots;
         }
@@ -1533,9 +1550,10 @@ public class ConveyorBlockEntity extends BlockEntity {
                 || entity.distanceToSqr(endPoint.x, endPoint.y, endPoint.z) <= maxDistanceSqr;
     }
 
-    private void updateClientVisual(PredictedRenderItem item, @Nullable ConveyorBlockEntity previousBelt,
-                                    @Nullable ConveyorBlockEntity nextBelt, long now,
-                                    double slotsPerTick, double maxCorrection) {
+    @Nullable
+    private SplineVisualItemEntity updateClientVisual(PredictedRenderItem item, @Nullable ConveyorBlockEntity previousBelt,
+                                                      @Nullable ConveyorBlockEntity nextBelt, long now,
+                                                      double slotsPerTick, double maxCorrection, double limit) {
         SplineVisualItemEntity downstream = nextBelt == null ? null : nextBelt.clientVisualItems.get(item.visualKey);
         if (downstream != null && downstream.snapshotOrder > clientSnapshotOrder
                 && ItemStack.isSameItemSameTags(downstream.getItem(), item.stack)) {
@@ -1544,7 +1562,7 @@ public class ConveyorBlockEntity extends BlockEntity {
             if (stale != null) {
                 stale.discard();
             }
-            return;
+            return null;
         }
 
         SplineVisualItemEntity visual = clientVisualItems.get(item.visualKey);
@@ -1553,7 +1571,7 @@ public class ConveyorBlockEntity extends BlockEntity {
             if (incoming != null && incoming.isAlive() && clientSnapshotOrder > incoming.snapshotOrder
                     && ItemStack.isSameItemSameTags(incoming.getItem(), item.stack)) {
                 if (!incoming.canEnterNextBelt(now)) {
-                    return;
+                    return null;
                 }
                 previousBelt.clientVisualItems.remove(item.visualKey);
                 incoming.enterBelt(this);
@@ -1564,11 +1582,12 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         if (visual == null || !visual.isAlive()) {
             double startUnits = item.slotUnits <= Math.max(1.0D, slotsPerTick + maxCorrection) ? 0.0D : item.slotUnits;
+            startUnits = clamp(startUnits, 0.0D, Math.max(0.0D, limit));
             Vec3 position = computeVisualPositionForSlotUnits(startUnits);
             visual = new SplineVisualItemEntity(this, level, position, item.stack, startUnits);
             if (!SatiscraftoryClient.addConveyorItemVisual(visual)) {
                 clientVisualItems.remove(item.visualKey);
-                return;
+                return null;
             }
             clientVisualItems.put(item.visualKey, visual);
         } else if (!ItemStack.isSameItemSameTags(visual.getItem(), item.stack)) {
@@ -1577,7 +1596,8 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         visual.snapshotOrder = clientSnapshotOrder;
         visual.departureTicks = 0;
-        visual.advanceTowards(item.slotUnits, now, slotsPerTick, maxCorrection);
+        visual.advanceTowards(item.slotUnits, limit, now, slotsPerTick, maxCorrection);
+        return visual;
     }
 
     private void finishDepartingVisuals(Set<Long> activeVisualKeys, boolean directOutput, long now,
@@ -1592,7 +1612,7 @@ public class ConveyorBlockEntity extends BlockEntity {
                 }
                 if (directOutput || visual.slotUnits >= bufferSlots - Math.max(1.0D, slotsPerTick * 2.0D)) {
                     if (visual.slotUnits < bufferSlots || visual.previousSlotUnits < bufferSlots) {
-                        visual.advanceTowards(bufferSlots, now, slotsPerTick, maxCorrection);
+                        visual.advanceTowards(bufferSlots, bufferSlots, now, slotsPerTick, maxCorrection);
                         continue;
                     }
                     if (directOutput && ++visual.departureTicks <= HANDOFF_GRACE_TICKS) {
@@ -1809,11 +1829,13 @@ public class ConveyorBlockEntity extends BlockEntity {
         private final long visualKey;
         private final ItemStack stack;
         private final double slotUnits;
+        private final double maxSlotUnits;
 
-        private PredictedRenderItem(long visualKey, ItemStack stack, double slotUnits) {
+        private PredictedRenderItem(long visualKey, ItemStack stack, double slotUnits, double maxSlotUnits) {
             this.visualKey = visualKey;
             this.stack = stack;
             this.slotUnits = slotUnits;
+            this.maxSlotUnits = maxSlotUnits;
         }
     }
 
@@ -1873,7 +1895,7 @@ public class ConveyorBlockEntity extends BlockEntity {
             conveyor = next;
         }
 
-        private void advanceTowards(double target, long now, double slotsPerTick, double maxCorrection) {
+        private void advanceTowards(double target, double limit, long now, double slotsPerTick, double maxCorrection) {
             if (motionTick != now) {
                 setOldPosAndRot();
                 previousSlotUnits = slotUnits;
@@ -1890,8 +1912,10 @@ public class ConveyorBlockEntity extends BlockEntity {
                         : -previousSlotUnits + slotsPerTick * (1.0D - timeToEdge);
             }
 
-            // A correction can make an item wait for the queue to catch up. Belts never run in reverse.
-            slotUnits = previousSlotUnits + clamp(target - previousSlotUnits, 0.0D, forward + maxCorrection);
+            // Correct snapshot drift through speed. The queue limit, rather than the snapshot, can stop motion.
+            double correction = (target - previousSlotUnits - forward) * CLIENT_POSITION_CORRECTION_GAIN;
+            double advance = forward + clamp(correction, -forward * 0.5D, maxCorrection);
+            slotUnits = Math.max(previousSlotUnits, Math.min(previousSlotUnits + advance, limit));
             Vec3 position = positionOnBelt(1.0F);
             setPos(position.x, position.y, position.z);
         }
