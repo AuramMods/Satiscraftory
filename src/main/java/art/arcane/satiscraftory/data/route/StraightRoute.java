@@ -163,6 +163,11 @@ final class StraightRoute {
 
     private static List<Vec3> horizontalPlan(Vec3 start, Direction startFacing, Vec3 end, Direction endFacing,
                                              boolean requireRampRoom) {
+        if (start.equals(end) && endFacing != startFacing.getOpposite()) {
+            // Both ports meet at this block's center, so only the leads and any corner are needed.
+            return new ArrayList<>(List.of(atHeight(start, 0.0D)));
+        }
+
         double margin = requireRampRoom ? FULL_RAMP_LEG : 1.0D;
         double[] xs = tracks(start.x, end.x, margin);
         double[] zs = tracks(start.z, end.z, margin);

@@ -120,7 +120,7 @@ public class ConveyorItem extends BlockItem {
         boolean blockedStart = !canPlaceBeltStart(level, startPos);
 
         Direction startFacing = state.resolveStartFacing(level, selectedPos, player.getDirection());
-        Direction endFacing = resolveEndFacing(level, startPos, selectedPos, player.getDirection());
+        Direction endFacing = state.resolveEndFacing(level, selectedPos, startFacing, player.getDirection());
         BeltRoute route = state.mode.create(startPos, startFacing, selectedPos, endFacing);
         int estimatedLength = route.lengthInBlocks();
         boolean overMaxLength = estimatedLength > MAX_BELT_LENGTH_BLOCKS;
@@ -309,30 +309,22 @@ public class ConveyorItem extends BlockItem {
     public static Direction resolveStartFacing(Level level, BlockPos startPos, BlockPos endPos, Direction fallback) {
         Direction dominant = resolveDominantFacing(startPos, endPos, fallback);
         Direction preferredSourceDirection = dominant.getOpposite();
-        Direction sourceDirection = chooseNeighborDirection(level, startPos, preferredSourceDirection);
+        Direction sourceDirection = chooseNeighborDirection(level, startPos, preferredSourceDirection, null);
         if (sourceDirection != null) {
             return sourceDirection.getOpposite();
         }
         return dominant;
     }
 
-    public static Direction resolveEndFacing(Level level, BlockPos startPos, BlockPos endPos, Direction fallback) {
-        Direction dominant = resolveDominantFacing(startPos, endPos, fallback);
-        Direction sinkDirection = chooseNeighborDirection(level, endPos, dominant);
-        if (sinkDirection != null) {
-            return sinkDirection;
-        }
-        return dominant;
-    }
-
     @Nullable
-    private static Direction chooseNeighborDirection(Level level, BlockPos centerPos, Direction preferredDirection) {
+    private static Direction chooseNeighborDirection(Level level, BlockPos centerPos, Direction preferredDirection,
+                                                     @Nullable Direction excludedDirection) {
         Direction best = null;
         int bestScore = Integer.MAX_VALUE;
 
         for (Direction direction : Direction.Plane.HORIZONTAL) {
             BlockPos neighborPos = centerPos.relative(direction);
-            if (!isConnectionCandidate(level, neighborPos)) {
+            if (direction == excludedDirection || !isConnectionCandidate(level, neighborPos)) {
                 continue;
             }
 
@@ -399,6 +391,14 @@ public class ConveyorItem extends BlockItem {
     public record PlacementState(BlockPos startPos, String dimensionId, @Nullable Direction startFacing, BeltRouteMode mode) {
         public Direction resolveStartFacing(Level level, BlockPos endPos, Direction fallback) {
             return startFacing != null ? startFacing : ConveyorItem.resolveStartFacing(level, startPos, endPos, fallback);
+        }
+
+        public Direction resolveEndFacing(Level level, BlockPos endPos, Direction resolvedStartFacing, Direction fallback) {
+            boolean singleBlock = mode == BeltRouteMode.STRAIGHT && startPos.equals(endPos);
+            Direction preferred = singleBlock ? resolvedStartFacing : resolveDominantFacing(startPos, endPos, fallback);
+            Direction excluded = singleBlock ? resolvedStartFacing.getOpposite() : null;
+            Direction sink = chooseNeighborDirection(level, endPos, preferred, excluded);
+            return sink == null ? preferred : sink;
         }
     }
 }

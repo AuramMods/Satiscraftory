@@ -73,7 +73,7 @@ public final class ConveyorPlacementPreview {
 
         BlockPos previewEndPos = ConveyorItem.resolvePreviewEndPos(level, blockHit.getBlockPos(), blockHit.getDirection());
         Direction startFacing = placement.resolveStartFacing(level, previewEndPos, player.getDirection());
-        Direction endFacing = ConveyorItem.resolveEndFacing(level, startPos, previewEndPos, player.getDirection());
+        Direction endFacing = placement.resolveEndFacing(level, previewEndPos, startFacing, player.getDirection());
         PreviewKey key = new PreviewKey(startPos, startFacing, previewEndPos, endFacing, placement.mode());
         if (!key.equals(previewKey)) {
             previewRoute = key.mode().create(startPos, startFacing, previewEndPos, endFacing);
