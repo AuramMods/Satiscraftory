@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "group": "satiscraftory:conveyor_2",
+  "pattern": [
+    "XYX",
+    "XFX",
+    "XYX"
+  ],
+  "key": {
+    "X": {
+      "item": "minecraft:stone"
+    },
+    "Y": {
+      "item": "minecraft:iron_ingot"
+    },
+    "F": {
+      "item": "satiscraftory:conveyor_1"
+    }
+  },
+  "result": {
+    "item": "satiscraftory:conveyor_2",
+    "count": 1
+  }
+}

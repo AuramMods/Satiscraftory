@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "group": "satiscraftory:conveyor_6",
+  "pattern": [
+    "XXX",
+    "YFY",
+    "XXX"
+  ],
+  "key": {
+    "X": {
+      "item": "minecraft:purpur_block"
+    },
+    "Y": {
+      "item": "minecraft:netherite_ingot"
+    },
+    "F": {
+      "item": "satiscraftory:conveyor_5"
+    }
+  },
+  "result": {
+    "item": "satiscraftory:conveyor_6",
+    "count": 1
+  }
+}

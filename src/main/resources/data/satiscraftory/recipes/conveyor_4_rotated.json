@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "group": "satiscraftory:conveyor_4",
+  "pattern": [
+    "XYX",
+    "XFX",
+    "XYX"
+  ],
+  "key": {
+    "X": {
+      "item": "minecraft:polished_blackstone_bricks"
+    },
+    "Y": {
+      "item": "minecraft:redstone"
+    },
+    "F": {
+      "item": "satiscraftory:conveyor_3"
+    }
+  },
+  "result": {
+    "item": "satiscraftory:conveyor_4",
+    "count": 1
+  }
+}

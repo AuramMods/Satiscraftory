@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "group": "satiscraftory:conveyor_5",
+  "pattern": [
+    "XYX",
+    "XFX",
+    "XYX"
+  ],
+  "key": {
+    "X": {
+      "item": "minecraft:end_stone_bricks"
+    },
+    "Y": {
+      "item": "minecraft:diamond"
+    },
+    "F": {
+      "item": "satiscraftory:conveyor_4"
+    }
+  },
+  "result": {
+    "item": "satiscraftory:conveyor_5",
+    "count": 1
+  }
+}

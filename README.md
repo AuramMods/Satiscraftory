@@ -36,7 +36,7 @@ Current content is centered around one transport block:
 ## Current Scope / Limitations
 
 - Only the conveyor block is implemented at this time.
-- There is no crafting recipe JSON yet; the block is currently easiest to access from the creative tab.
+- All six belt tiers have horizontal and vertical 3×3 crafting recipes. Tiers 2–6 consume one belt from the previous tier.
 - Extra runtime mod jars in `extra-mods-1.20.1/` are loaded only for local runtime/dev and are not bundled into this mod jar.
 
 ## Requirements

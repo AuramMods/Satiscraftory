@@ -1,0 +1,42 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_ingredient": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "satiscraftory:conveyor_5"
+            ]
+          }
+        ]
+      }
+    },
+    "has_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "satiscraftory:conveyor_6"
+      }
+    },
+    "has_rotated_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "satiscraftory:conveyor_6_rotated"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_ingredient",
+      "has_recipe",
+      "has_rotated_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "satiscraftory:conveyor_6",
+      "satiscraftory:conveyor_6_rotated"
+    ]
+  }
+}

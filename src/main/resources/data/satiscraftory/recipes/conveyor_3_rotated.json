@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "group": "satiscraftory:conveyor_3",
+  "pattern": [
+    "XYX",
+    "XFX",
+    "XYX"
+  ],
+  "key": {
+    "X": {
+      "item": "minecraft:nether_bricks"
+    },
+    "Y": {
+      "item": "minecraft:gold_ingot"
+    },
+    "F": {
+      "item": "satiscraftory:conveyor_2"
+    }
+  },
+  "result": {
+    "item": "satiscraftory:conveyor_3",
+    "count": 1
+  }
+}
