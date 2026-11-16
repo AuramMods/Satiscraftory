@@ -5,6 +5,16 @@
   "sortnum": 0,
   "pages": [
     {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:splitter",
+      "text": "Use four iron ingots in the corners, four planks along the edges, and a chest in the center. Any plank type works."
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:splitter_from_merger",
+      "text": "Craft one merger into one splitter in any crafting grid. Craft the splitter by itself to swap back. Each conversion uses one block and needs no extra ingredients."
+    },
+    {
       "type": "patchouli:text",
       "title": "Splitter Ports",
       "text": "A splitter accepts items on one horizontal face and sends them to the other three horizontal faces.$(br2)When placed, its input faces you. Connect a supply belt to that face and destination belts to the outputs."

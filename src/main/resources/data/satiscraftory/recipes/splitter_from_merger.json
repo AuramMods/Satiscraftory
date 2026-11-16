@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "redstone",
+  "group": "satiscraftory:splitter",
+  "ingredients": [
+    {
+      "item": "satiscraftory:merger"
+    }
+  ],
+  "result": {
+    "item": "satiscraftory:splitter",
+    "count": 1
+  }
+}

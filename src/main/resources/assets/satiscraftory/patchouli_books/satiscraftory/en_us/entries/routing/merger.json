@@ -5,6 +5,16 @@
   "sortnum": 10,
   "pages": [
     {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:merger",
+      "text": "Use four iron ingots in the corners, four planks along the edges, and a hopper in the center. Any plank type works."
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:merger_from_splitter",
+      "text": "Craft one splitter into one merger in any crafting grid. Craft the merger by itself to swap back. Each conversion uses one block and needs no extra ingredients."
+    },
+    {
       "type": "patchouli:text",
       "title": "Merger Ports",
       "text": "A merger accepts items on three horizontal faces and sends them out through the remaining face.$(br2)When placed, its output points away from you. Route supply belts into the other three faces."
