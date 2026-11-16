@@ -17,7 +17,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -38,22 +37,17 @@ import net.minecraftforge.items.wrapper.PlayerMainInvWrapper;
 
 import javax.annotation.Nullable;
 import java.util.EnumMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class ConveyorBlockEntity extends BlockEntity {
     private static final double MIN_CARGO_SPACING = 0.625D;
     private static final int LEGACY_SLOTS_PER_BLOCK = 3;
     private static final int DEFAULT_TRAVEL_TICKS_PER_BLOCK = 60;
-    private static final double CLIENT_POSITION_CORRECTION_GAIN = 0.25D;
-    private static final double VISUAL_RANGE_BLOCKS = 16.0D;
 
     private static final String BELT_LENGTH_BLOCKS_TAG = "belt_length_blocks";
     private static final String TRAVEL_TICKS_PER_BLOCK_TAG = "travel_ticks_per_block";
     private static final String SYNC_REVISION_TAG = "sync_revision";
-    private static final String PICKED_UP_ITEMS_TAG = "picked_up_items";
 
     private final ConveyorEndpoints endpoints = new ConveyorEndpoints(this);
     private int beltLengthBlocks = 1;
@@ -66,11 +60,7 @@ public class ConveyorBlockEntity extends BlockEntity {
 
     private final ConveyorTransport transport = new ConveyorTransport(this, buffer);
     private final ConveyorVisuals visuals = new ConveyorVisuals(this);
-    private final Set<Long> pickedUpItems = new HashSet<>();
-    private long lastSyncPacketGameTime = Long.MIN_VALUE;
-    private long syncRevision;
-    private boolean needsSync;
-    private boolean urgentSyncPending;
+    private final ConveyorSync sync = new ConveyorSync(this);
     @Nullable
     private MiningImpact miningImpact;
 
@@ -104,6 +94,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         if (changedTier) {
             travelTicksPerBlock = resolveTravelTicksPerBlock(state);
             markDirtyForSync();
+            requestUrgentSync();
         }
     }
 
@@ -130,7 +121,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         recalculateLengthAndResize();
         endpoints.updateLinkedEndMarker(previousEndPos);
         setChanged();
-        syncToClient();
+        requestUrgentSync();
     }
 
     public void removeLinkedEndMarker() {
@@ -197,7 +188,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         buffer.save(tag);
         transport.save(tag);
         tag.putInt(TRAVEL_TICKS_PER_BLOCK_TAG, travelTicksPerBlock);
-        tag.putLong(SYNC_REVISION_TAG, syncRevision);
+        tag.putLong(SYNC_REVISION_TAG, sync.revision());
     }
 
     @Override
@@ -220,10 +211,7 @@ public class ConveyorBlockEntity extends BlockEntity {
         travelTicksPerBlock = tag.contains(TRAVEL_TICKS_PER_BLOCK_TAG, Tag.TAG_INT)
                 ? Math.max(1, tag.getInt(TRAVEL_TICKS_PER_BLOCK_TAG))
                 : resolveTravelTicksPerBlock(getBlockState());
-        syncRevision = Math.max(0L, incomingRevision);
-        lastSyncPacketGameTime = Long.MIN_VALUE;
-        needsSync = false;
-        urgentSyncPending = false;
+        sync.loadRevision(incomingRevision);
 
         buffer.normalizeInventory(false);
         recalculateLengthAndResize();
@@ -233,9 +221,15 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         if (isClient) {
             buffer.sanitizeClientLoadedState();
-            visuals.applySnapshot(level.getGameTime(), syncRevision, tag.getLongArray(PICKED_UP_ITEMS_TAG),
+            int interval = tag.contains(ConveyorSync.INTERVAL_TAG)
+                    ? Mth.clamp(tag.getInt(ConveyorSync.INTERVAL_TAG), 1, ConveyorSync.MAX_INTERVAL_TICKS)
+                    : visuals.updateIntervalTicks();
+            long now = level.getGameTime();
+            long age = tag.contains(ConveyorSync.GAME_TIME_TAG)
+                    ? Math.max(0L, Math.min(now - tag.getLong(ConveyorSync.GAME_TIME_TAG), ConveyorSync.MAX_INTERVAL_TICKS * 2L)) : 0L;
+            visuals.applySnapshot(now - age, sync.revision(), tag.getLongArray(ConveyorSync.PICKED_UP_ITEMS_TAG),
                     tag.getLongArray(ConveyorTransport.CONTAINER_ARRIVALS_TAG),
-                    tag.getLongArray(ConveyorTransport.CONTAINER_DEPARTURES_TAG));
+                    tag.getLongArray(ConveyorTransport.CONTAINER_DEPARTURES_TAG), interval);
         }
 
         rebuildCapabilities();
@@ -250,10 +244,8 @@ public class ConveyorBlockEntity extends BlockEntity {
     @Override
     public CompoundTag getUpdateTag() {
         CompoundTag tag = saveWithoutMetadata();
+        sync.writeUpdateMetadata(tag);
         transport.writeContainerTransfers(tag);
-        if (!pickedUpItems.isEmpty()) {
-            tag.putLongArray(PICKED_UP_ITEMS_TAG, pickedUpItems.stream().mapToLong(Long::longValue).toArray());
-        }
         return tag;
     }
 
@@ -341,12 +333,10 @@ public class ConveyorBlockEntity extends BlockEntity {
 
         transport.tick(level);
 
-        if (needsSync && syncDirtyItems()) {
-            needsSync = false;
+        if (level instanceof ServerLevel serverLevel) {
+            sync.tick(serverLevel);
         }
-        // Transfer cues only apply to observers of this tick's snapshot.
         transport.clearContainerTransfers();
-        urgentSyncPending = false;
     }
 
     List<RenderItem> predictClientRenderItems(long elapsedTicks) {
@@ -384,7 +374,7 @@ public class ConveyorBlockEntity extends BlockEntity {
                     if (!ItemHandlerHelper.insertItemStacked(new PlayerMainInvWrapper(player.getInventory()), stack, false).isEmpty()) {
                         return false;
                     }
-                    pickedUpItems.add(itemId);
+                    sync.pickedUp(itemId);
                     transport.removeItemAt(slot);
                     return true;
                 }
@@ -405,10 +395,6 @@ public class ConveyorBlockEntity extends BlockEntity {
         return buffer.resizeTo(desiredSlots) || lengthChanged;
     }
 
-    private long getClientSyncIntervalTicks() {
-        return Math.max(1L, travelTicksPerBlock / 2L);
-    }
-
     Direction getInputSide() {
         return getStartFacing().getOpposite();
     }
@@ -418,111 +404,21 @@ public class ConveyorBlockEntity extends BlockEntity {
     }
 
     void requestUrgentSync() {
-        urgentSyncPending = true;
+        sync.requestImmediate();
     }
 
     void markDirtyForSync() {
         setChanged();
-        needsSync = true;
-    }
-
-    private boolean syncDirtyItems() {
-        if (level == null || level.isClientSide) {
-            return true;
-        }
-
-        long now = level.getGameTime();
-        if (!urgentSyncPending && lastSyncPacketGameTime != Long.MIN_VALUE
-                && now - lastSyncPacketGameTime < getClientSyncIntervalTicks()) {
-            return false;
-        }
-
-        syncRevision++;
-        lastSyncPacketGameTime = now;
-        if (sendUpdateToNearbyPlayers()) {
-            pickedUpItems.clear();
-            return true;
-        }
-        return false;
-    }
-
-    private void syncToClient() {
-        if (level == null || level.isClientSide) {
-            return;
-        }
-
-        syncRevision++;
-        lastSyncPacketGameTime = level.getGameTime();
-        sendUpdateToNearbyPlayers();
+        sync.markDirty();
     }
 
     boolean isPlayerWithinVisualRange(Level level) {
-        Vec3 startPoint = getVisualStartPoint();
-        Vec3 endPoint = getVisualEndPoint();
-        double maxDistanceSqr = getVisualRangeBlocks() * getVisualRangeBlocks();
-
         for (Player player : level.players()) {
-            if (isEntityWithinVisualRange(player, startPoint, endPoint, maxDistanceSqr)) {
+            if (sync.isWithinVisualRange(player)) {
                 return true;
             }
         }
         return false;
-    }
-
-    private double getVisualRangeBlocks() {
-        return VISUAL_RANGE_BLOCKS;
-    }
-
-    private boolean sendUpdateToNearbyPlayers() {
-        if (!(level instanceof ServerLevel serverLevel)) {
-            return false;
-        }
-
-        ClientboundBlockEntityDataPacket packet = getUpdatePacket();
-        if (packet == null) {
-            return false;
-        }
-
-        Vec3 startPoint = getVisualStartPoint();
-        Vec3 endPoint = getVisualEndPoint();
-        double maxDistanceSqr = getVisualRangeBlocks() * getVisualRangeBlocks();
-        boolean sent = false;
-
-        for (ServerPlayer player : serverLevel.players()) {
-            if (!isEntityWithinVisualRange(player, startPoint, endPoint, maxDistanceSqr)) {
-                continue;
-            }
-            player.connection.send(packet);
-            sent = true;
-        }
-
-        return sent;
-    }
-
-    private Vec3 getVisualStartPoint() {
-        return new Vec3(
-                worldPosition.getX() + 0.5D,
-                worldPosition.getY() + 0.5D,
-                worldPosition.getZ() + 0.5D
-        );
-    }
-
-    private Vec3 getVisualEndPoint() {
-        BlockPos endPos = getEndPos();
-        BlockPos endPoint = endPos != null ? endPos : worldPosition.relative(getOutputSide());
-        return new Vec3(
-                endPoint.getX() + 0.5D,
-                endPoint.getY() + 0.5D,
-                endPoint.getZ() + 0.5D
-        );
-    }
-
-    private static boolean isEntityWithinVisualRange(Entity entity, Vec3 startPoint, Vec3 endPoint, double maxDistanceSqr) {
-        if (entity == null || !entity.isAlive()) {
-            return false;
-        }
-        return entity.distanceToSqr(startPoint.x, startPoint.y, startPoint.z) <= maxDistanceSqr
-                || entity.distanceToSqr(endPoint.x, endPoint.y, endPoint.z) <= maxDistanceSqr;
     }
 
     @Nullable
@@ -686,7 +582,7 @@ public class ConveyorBlockEntity extends BlockEntity {
             }
 
             // Correct snapshot drift through speed. The queue limit, rather than the snapshot, can stop motion.
-            double correction = (target - previousSlotUnits - forward) * CLIENT_POSITION_CORRECTION_GAIN;
+            double correction = (target - previousSlotUnits - forward) * conveyor.visuals.correctionGain();
             double advance = forward + clamp(correction, -forward * 0.5D, maxCorrection);
             slotUnits = Math.max(previousSlotUnits, Math.min(previousSlotUnits + advance, limit));
             Vec3 position = positionOnBelt(1.0F);

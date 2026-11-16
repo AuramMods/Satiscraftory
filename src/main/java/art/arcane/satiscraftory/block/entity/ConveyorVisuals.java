@@ -37,6 +37,8 @@ final class ConveyorVisuals {
     private long lastClientAppliedRevision = Long.MIN_VALUE;
     private long clientSnapshotGameTime = Long.MIN_VALUE;
     private long clientSnapshotOrder;
+    private int updateIntervalTicks = 1;
+    private double correctionGain = 0.25D;
 
     ConveyorVisuals(ConveyorBlockEntity belt) {
         this.belt = belt;
@@ -46,10 +48,12 @@ final class ConveyorVisuals {
         return revision >= lastClientAppliedRevision;
     }
 
-    void applySnapshot(long gameTime, long revision, long[] pickedUpItems, long[] arrivals, long[] departures) {
+    void applySnapshot(long gameTime, long revision, long[] pickedUpItems, long[] arrivals, long[] departures, int interval) {
         lastClientAppliedRevision = revision;
         clientSnapshotGameTime = gameTime;
         clientSnapshotOrder = ++nextClientSnapshotOrder;
+        updateIntervalTicks = interval;
+        correctionGain = 1.0D - Math.pow(0.75D, 1.0D / interval);
         for (long itemId : pickedUpItems) {
             SplineVisualItemEntity visual = items.remove(itemId);
             if (visual != null) {
@@ -65,6 +69,14 @@ final class ConveyorVisuals {
                 containerDepartures.add(visual);
             }
         }
+    }
+
+    int updateIntervalTicks() {
+        return updateIntervalTicks;
+    }
+
+    double correctionGain() {
+        return correctionGain;
     }
 
     void tick(Level level, BlockState state) {
@@ -88,7 +100,7 @@ final class ConveyorVisuals {
         ConveyorBlockEntity previousBelt = belt.transport().getDirectInputConveyor();
         List<RenderItem> prediction = belt.predictClientRenderItems(elapsedTicks);
         double slotsPerTick = belt.getStepsPerTick();
-        double maxCorrection = Math.max(MIN_CLIENT_CORRECTION_SLOTS_PER_TICK,
+        double maxCorrection = Math.max(MIN_CLIENT_CORRECTION_SLOTS_PER_TICK / updateIntervalTicks,
                 slotsPerTick * CLIENT_CORRECTION_SPEED_FRACTION);
 
         Set<Long> activeVisualKeys = new HashSet<>();
@@ -107,7 +119,7 @@ final class ConveyorVisuals {
             }
         }
 
-        finishDepartingVisuals(activeVisualKeys, nextBelt != null, now, slotsPerTick, maxCorrection);
+        finishDepartingVisuals(activeVisualKeys, nextBelt, now, slotsPerTick, maxCorrection);
         containerArrivals.clear();
     }
 
@@ -192,8 +204,11 @@ final class ConveyorVisuals {
         return nextVisualLimit;
     }
 
-    private void finishDepartingVisuals(Set<Long> activeVisualKeys, boolean directOutput, long now,
+    private void finishDepartingVisuals(Set<Long> activeVisualKeys, @Nullable ConveyorBlockEntity nextBelt, long now,
                                         double slotsPerTick, double maxCorrection) {
+        boolean directOutput = nextBelt != null;
+        int handoffGrace = HANDOFF_GRACE_TICKS + Math.max(updateIntervalTicks,
+                directOutput ? nextBelt.visuals().updateIntervalTicks : 1) - 1;
         var iterator = items.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<Long, SplineVisualItemEntity> entry = iterator.next();
@@ -207,7 +222,7 @@ final class ConveyorVisuals {
                         visual.advanceTowards(belt.bufferSize(), belt.bufferSize(), now, slotsPerTick, maxCorrection);
                         continue;
                     }
-                    if (directOutput && ++visual.departureTicks <= HANDOFF_GRACE_TICKS) {
+                    if (directOutput && ++visual.departureTicks <= handoffGrace) {
                         continue;
                     }
                 }

@@ -47,7 +47,7 @@ final class ConveyorPrediction {
     }
 
     static List<RenderItem> predict(ConveyorBuffer buffer, double accumulator, double slotsPerTick,
-                                    long elapsedTicks, long blockedItemId, Predicate<ItemStack> canExit) {
+                                    long elapsedTicks, long blockedItemId, Predicate<ItemStack> canExit, int updateIntervalTicks) {
         List<PredictedQueueItem> queue = snapshot(buffer);
         if (queue.isEmpty()) {
             return List.of();
@@ -60,7 +60,8 @@ final class ConveyorPrediction {
                 ? 0.0D
                 : Mth.clamp(projectedAccumulator - projectedWholeSteps, 0.0D, 1.0D);
 
-        double coastSlots = Math.min(MAX_COAST_SLOTS, slotsPerTick * COAST_TICKS);
+        double coastTicks = COAST_TICKS + updateIntervalTicks - 1.0D;
+        double coastSlots = Math.min(MAX_COAST_SLOTS * updateIntervalTicks, slotsPerTick * coastTicks);
         boolean outputOpen = canPredictOutputDeparture(queue.get(0), buffer.size(), simulatedWholeSteps + partialProgress + coastSlots,
                 blockedItemId, canExit);
         for (int step = 0; step < simulatedWholeSteps; step++) {

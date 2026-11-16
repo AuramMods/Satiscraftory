@@ -74,6 +74,18 @@ final class ConveyorTransport {
         containerDepartures.clear();
     }
 
+    List<Long> containerArrivals() {
+        return containerArrivals;
+    }
+
+    List<Long> containerDepartures() {
+        return containerDepartures;
+    }
+
+    boolean hasCargo() {
+        return !buffer.stack(0).isEmpty();
+    }
+
     void tick(Level level) {
         boolean firstTick = lastAccumulatorTick == Long.MIN_VALUE;
         updateStepAccumulator(level.getGameTime());
@@ -93,7 +105,7 @@ final class ConveyorTransport {
 
     List<RenderItem> predictCargo(long elapsedTicks) {
         return ConveyorPrediction.predict(buffer, stepAccumulator, getStepsPerTick(), elapsedTicks,
-                blockedOutputItemId, this::canSendToOutput);
+                blockedOutputItemId, this::canSendToOutput, belt.visuals().updateIntervalTicks());
     }
 
     IItemHandler itemHandler(@Nullable Direction side) {
@@ -281,8 +293,6 @@ final class ConveyorTransport {
         }
         target.transport().buffer.appendItem(slot, transfer.stack, transfer.itemId);
         target.transport().directInputPos = belt.getBlockPos();
-        // Let both belts publish their completed tick without waiting for the regular snapshot interval.
-        target.requestUrgentSync();
         return true;
     }
 
@@ -349,7 +359,6 @@ final class ConveyorTransport {
         buffer.appendItem(slot, stack, itemId);
         if (fromContainer) {
             containerArrivals.add(itemId);
-            belt.requestUrgentSync();
         }
     }
 
@@ -424,10 +433,10 @@ final class ConveyorTransport {
 
     void removeItemAt(int slot) {
         buffer.remove(slot);
-        if (slot == 0) {
+        if (slot == 0 && blockedOutputItemId != 0L) {
             blockedOutputItemId = 0L;
+            belt.requestUrgentSync();
         }
-        belt.requestUrgentSync();
         belt.markDirtyForSync();
     }
 
