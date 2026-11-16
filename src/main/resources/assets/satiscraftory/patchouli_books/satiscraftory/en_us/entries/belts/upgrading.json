@@ -1,0 +1,18 @@
+{
+  "name": "Change a Belt Tier",
+  "icon": "satiscraftory:conveyor_6",
+  "category": "satiscraftory:belts",
+  "sortnum": 70,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "Change a Belt Tier",
+      "text": "Hold a belt of another tier and aim at a placed belt. Its outline fades to yellow.$(br2)Right-click to swap the entire section to the held tier. The route and cargo are preserved, and one held belt is consumed."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Recover the Old Belt",
+      "text": "The old belt tier goes into your inventory. If it cannot fit, it drops at the point you clicked.$(br2)You can swap to either a faster or a slower tier. Connected sections may use different tiers.$(br2)A slower downstream section can limit the flow of the whole line."
+    }
+  ]
+}

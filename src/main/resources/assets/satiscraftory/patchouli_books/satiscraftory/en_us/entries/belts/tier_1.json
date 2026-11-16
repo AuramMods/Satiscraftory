@@ -1,0 +1,19 @@
+{
+  "name": "Conveyor Belt Mk.1",
+  "icon": "satiscraftory:conveyor_1",
+  "category": "satiscraftory:belts",
+  "sortnum": 10,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "Mk.1",
+      "text": "Use six $(item)wood planks$() and three $(item)copper ingots$(). Any wood plank type works.$(br2)Travel time is 60 game ticks per block, about 3 seconds. Items queue when the output is full."
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:conveyor_1",
+      "recipe2": "satiscraftory:conveyor_1_rotated",
+      "text": "Either layout makes one belt."
+    }
+  ]
+}

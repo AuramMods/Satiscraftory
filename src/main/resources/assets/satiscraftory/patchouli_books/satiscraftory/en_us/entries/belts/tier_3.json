@@ -1,0 +1,19 @@
+{
+  "name": "Conveyor Belt Mk.3",
+  "icon": "satiscraftory:conveyor_3",
+  "category": "satiscraftory:belts",
+  "sortnum": 30,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "Mk.3",
+      "text": "Use six $(item)nether bricks$(), two $(item)gold ingots$(), and one $(l:satiscraftory:belts/tier_2)Mk.2 belt$(/l) in the center.$(br2)Travel time is 15 game ticks per block, about 0.75 seconds."
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:conveyor_3",
+      "recipe2": "satiscraftory:conveyor_3_rotated",
+      "text": "Either layout makes one belt."
+    }
+  ]
+}

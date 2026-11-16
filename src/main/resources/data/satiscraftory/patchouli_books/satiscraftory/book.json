@@ -1,0 +1,22 @@
+{
+  "name": "book.satiscraftory.name",
+  "model": "satiscraftory:book",
+  "landing_text": "book.satiscraftory.landing",
+  "version": 1,
+  "creative_tab": "satiscraftory:satiscraftory_tab",
+  "use_resource_pack": true,
+  "book_texture": "satiscraftory:textures/gui/book.png",
+  "filler_texture": "satiscraftory:textures/gui/page_filler.png",
+  "crafting_texture": "satiscraftory:textures/gui/crafting.png",
+  "text_color": "332b20",
+  "header_color": "8f480d",
+  "nameplate_color": "ffca45",
+  "link_color": "ae5007",
+  "link_hover_color": "db8309",
+  "show_progress": false,
+  "show_toasts": false,
+  "macros": {
+    "$(item)": "$(#a85a08)",
+    "$(thing)": "$(#bd600a)"
+  }
+}

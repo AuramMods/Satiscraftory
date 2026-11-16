@@ -1,0 +1,23 @@
+{
+  "name": "Placement and Routes",
+  "icon": "satiscraftory:conveyor_2",
+  "category": "satiscraftory:basics",
+  "sortnum": 10,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "Choose Two Ends",
+      "text": "Right-click a block to set the start, then right-click the destination to place the section.$(br2)For chests and other inventories, hold sneak and click the exact horizontal face you want. That face is highlighted while you aim. The adjacent space must be clear."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Choose a Route",
+      "text": "Press $(thing)Tab$() during the preview to cycle between $(thing)Straight$() and $(thing)Spline$(). Your last choice is remembered by the client.$(br2)Straight follows straight runs with rounded right-angle turns. Spline follows a flowing curve. Both support climbs and descents."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Stack and Extend",
+      "text": "Attaching directly to a container face lets you place vertically stacked connections without a support block below each start.$(br2)Extend a line through a belt's open input or output. Another belt's side cannot receive items.$(br2)Right-click air during the preview to cancel."
+    }
+  ]
+}

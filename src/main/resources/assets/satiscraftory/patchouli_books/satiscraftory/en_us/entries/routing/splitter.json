@@ -1,0 +1,21 @@
+{
+  "name": "Splitter",
+  "icon": "satiscraftory:splitter",
+  "category": "satiscraftory:routing",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "Splitter Ports",
+      "text": "A splitter accepts items on one horizontal face and sends them to the other three horizontal faces.$(br2)When placed, its input faces you. Connect a supply belt to that face and destination belts to the outputs."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Distribution",
+      "text": "The splitter rotates through outputs that can accept an item. Full or disconnected outputs are skipped.$(br2)Click the specific output face with a belt to start an outgoing section. Complete an incoming belt on the input face.$(br2)Outputs share the incoming supply."
+    }
+  ],
+  "extra_recipe_mappings": {
+    "satiscraftory:splitter": 0
+  }
+}

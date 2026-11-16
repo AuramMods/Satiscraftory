@@ -1,0 +1,40 @@
+{
+  "forge:conditions": [
+    {
+      "type": "forge:mod_loaded",
+      "modid": "patchouli"
+    }
+  ],
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_copper": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "minecraft:copper_ingot"
+            ]
+          }
+        ]
+      }
+    },
+    "has_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "satiscraftory:guide_book"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_copper",
+      "has_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "satiscraftory:guide_book"
+    ]
+  }
+}

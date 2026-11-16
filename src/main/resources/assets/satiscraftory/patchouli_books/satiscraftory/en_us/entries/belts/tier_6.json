@@ -1,0 +1,19 @@
+{
+  "name": "Conveyor Belt Mk.6",
+  "icon": "satiscraftory:conveyor_6",
+  "category": "satiscraftory:belts",
+  "sortnum": 60,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "Mk.6",
+      "text": "Use six $(item)purpur blocks$(), two $(item)netherite ingots$(), and one $(l:satiscraftory:belts/tier_5)Mk.5 belt$(/l) in the center.$(br2)Travel time is 2 game ticks per block, about 0.1 seconds."
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:conveyor_6",
+      "recipe2": "satiscraftory:conveyor_6_rotated",
+      "text": "Either layout makes one belt."
+    }
+  ]
+}

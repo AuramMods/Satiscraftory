@@ -7,5 +7,7 @@
   "block.satiscraftory.conveyor_5": "Conveyor Belt Mk.5",
   "block.satiscraftory.conveyor_6": "Conveyor Belt Mk.6",
   "block.satiscraftory.splitter": "Splitter",
-  "block.satiscraftory.merger": "Merger"
+  "block.satiscraftory.merger": "Merger",
+  "book.satiscraftory.name": "Satiscraftory Field Guide",
+  "book.satiscraftory.landing": "Build your first conveyor, choose a belt tier, and connect your production lines.$(br2)Start with $(l:satiscraftory:basics/first_belt)Your First Belt$(/l), or browse the tier recipes and routing blocks."
 }

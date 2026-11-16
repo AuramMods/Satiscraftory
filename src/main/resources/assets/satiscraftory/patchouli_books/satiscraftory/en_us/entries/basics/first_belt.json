@@ -1,0 +1,23 @@
+{
+  "name": "Your First Belt",
+  "icon": "satiscraftory:conveyor_1",
+  "category": "satiscraftory:basics",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:guide_book",
+      "text": "Craft this guide with a book, a copper ingot, and yellow dye in any arrangement."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Your First Belt",
+      "text": "Craft a $(l:satiscraftory:belts/tier_1)Mk.1 belt$(/l). Place a chest with items at the source and another chest at the destination.$(br2)Hold the belt and sneak-right-click a horizontal face of the source chest. This fixes the input face and starts the preview."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Connect the Output",
+      "text": "Sneak-right-click the destination chest face to finish. Items move from the first click toward the second.$(br2)One belt item places one complete section, up to 16 blocks of route length. Longer runs use several connected sections.$(br2)See $(l:satiscraftory:basics/placement)Placement and Routes$(/l)."
+    }
+  ]
+}

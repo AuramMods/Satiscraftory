@@ -1,0 +1,23 @@
+{
+  "name": "Items and Maintenance",
+  "icon": "minecraft:iron_pickaxe",
+  "category": "satiscraftory:basics",
+  "sortnum": 20,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "Pick Up Cargo",
+      "text": "Right-click an item on the belt to move it into your inventory. The item stays on the belt when your inventory has no room.$(br2)Cargo follows the deck through turns and slopes, and stops behind blocked items."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Clear a Jam",
+      "text": "A full destination or a blocked downstream input backs up the line. Empty the destination or open space in the next section to resume transport.$(br2)Check the direction of your section and the selected faces on $(l:satiscraftory:routing/splitter)splitters$(/l) and $(l:satiscraftory:routing/merger)mergers$(/l)."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Remove a Section",
+      "text": "Hold left click on the belt surface to dig the entire section. A pickaxe is fastest. Cracks show your progress along the belt.$(br2)The belt item drops where you dug, and transported items drop along the route.$(br2)Players and entities can pass through belts."
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Routing Items",
+  "description": "Split one supply across several destinations or merge lines into one output.",
+  "icon": "satiscraftory:splitter",
+  "sortnum": 20
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Conveyor Belt Mk.2",
+  "icon": "satiscraftory:conveyor_2",
+  "category": "satiscraftory:belts",
+  "sortnum": 20,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "Mk.2",
+      "text": "Use six $(item)stone$(), two $(item)iron ingots$(), and one $(l:satiscraftory:belts/tier_1)Mk.1 belt$(/l) in the center.$(br2)Travel time is 30 game ticks per block, about 1.5 seconds."
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:conveyor_2",
+      "recipe2": "satiscraftory:conveyor_2_rotated",
+      "text": "Either layout makes one belt."
+    }
+  ]
+}

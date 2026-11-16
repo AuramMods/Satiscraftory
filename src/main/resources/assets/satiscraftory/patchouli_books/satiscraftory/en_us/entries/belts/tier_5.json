@@ -1,0 +1,19 @@
+{
+  "name": "Conveyor Belt Mk.5",
+  "icon": "satiscraftory:conveyor_5",
+  "category": "satiscraftory:belts",
+  "sortnum": 50,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "Mk.5",
+      "text": "Use six $(item)end stone bricks$(), two $(item)diamonds$(), and one $(l:satiscraftory:belts/tier_4)Mk.4 belt$(/l) in the center.$(br2)Travel time is 4 game ticks per block, about 0.2 seconds."
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:conveyor_5",
+      "recipe2": "satiscraftory:conveyor_5_rotated",
+      "text": "Either layout makes one belt."
+    }
+  ]
+}

@@ -16,6 +16,12 @@ Satiscraftory is a Minecraft Forge mod that currently adds a functional conveyor
 
 The authoritative values live in `gradle.properties` and are injected into `mods.toml` during `processResources`.
 
+## Guidebook
+
+Install Patchouli to use the Satiscraftory Field Guide. Craft it with a book, a copper ingot, and yellow dye in any arrangement, or find it in the Satiscraftory creative tab.
+
+The orange and yellow guide covers placement, routing modes, all six belt recipes, tier swaps, item pickup, splitters, and mergers. Patchouli is optional.
+
 ## What The Mod Does
 
 Current content is centered around one transport block:

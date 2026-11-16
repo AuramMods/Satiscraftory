@@ -1,0 +1,19 @@
+{
+  "name": "Conveyor Belt Mk.4",
+  "icon": "satiscraftory:conveyor_4",
+  "category": "satiscraftory:belts",
+  "sortnum": 40,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "Mk.4",
+      "text": "Use six $(item)polished blackstone bricks$(), two $(item)redstone dust$(), and one $(l:satiscraftory:belts/tier_3)Mk.3 belt$(/l) in the center.$(br2)Travel time is 8 game ticks per block, about 0.4 seconds."
+    },
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:conveyor_4",
+      "recipe2": "satiscraftory:conveyor_4_rotated",
+      "text": "Either layout makes one belt."
+    }
+  ]
+}

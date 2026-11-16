@@ -1,0 +1,32 @@
+{
+  "type": "forge:conditional",
+  "recipes": [
+    {
+      "conditions": [
+        {
+          "type": "forge:mod_loaded",
+          "modid": "patchouli"
+        }
+      ],
+      "recipe": {
+        "type": "patchouli:shapeless_book_recipe",
+        "book": "satiscraftory:satiscraftory",
+        "ingredients": [
+          {
+            "item": "minecraft:book"
+          },
+          {
+            "item": "minecraft:copper_ingot"
+          },
+          {
+            "item": "minecraft:yellow_dye"
+          }
+        ],
+        "result": {
+          "item": "patchouli:guide_book",
+          "count": 1
+        }
+      }
+    }
+  ]
+}

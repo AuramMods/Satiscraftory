@@ -1,0 +1,21 @@
+{
+  "name": "Merger",
+  "icon": "satiscraftory:merger",
+  "category": "satiscraftory:routing",
+  "sortnum": 10,
+  "pages": [
+    {
+      "type": "patchouli:text",
+      "title": "Merger Ports",
+      "text": "A merger accepts items on three horizontal faces and sends them out through the remaining face.$(br2)When placed, its output points away from you. Route supply belts into the other three faces."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Combine Lines",
+      "text": "Click the output face with a belt to start the outgoing section. Complete incoming sections on an input face.$(br2)The merger waits while its output is blocked. Upstream belts then queue behind it.$(br2)Choose an output belt fast enough for the combined supply."
+    }
+  ],
+  "extra_recipe_mappings": {
+    "satiscraftory:merger": 0
+  }
+}
