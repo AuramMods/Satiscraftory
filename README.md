@@ -8,7 +8,7 @@ Satiscraftory is a Minecraft Forge mod that currently adds a functional conveyor
 | --- | --- |
 | Mod ID | `satiscraftory` |
 | Mod Name | `Satiscraftory` |
-| Mod Version | `1.0.0` |
+| Mod Version | `1.1.0` |
 | Minecraft Version | `1.20.1` |
 | Forge Version | `47.4.10` |
 | Java Target | `17` (toolchain) |
@@ -20,30 +20,24 @@ The authoritative values live in `gradle.properties` and are injected into `mods
 
 Install Patchouli to use the Satiscraftory Field Guide. Craft it with a book, a copper ingot, and yellow dye in any arrangement, or find it in the Satiscraftory creative tab.
 
-The orange and yellow guide covers placement, routing modes, all six belt recipes, tier swaps, item pickup, splitters, and mergers. Patchouli is optional.
+The orange and yellow guide covers belt placement, routing modes, all six belt tiers, tier swaps, item pickup, splitters, mergers, and the Smelter, Constructor, Assembler, and Manufacturer. Patchouli is optional.
 
 ## What The Mod Does
 
-Current content is centered around one transport block:
+- Six conveyor tiers with straight and spline routing, animated cargo, inventory connections, and splitter/merger routing.
+- Belt selection, mining, item pickup, tier swaps, and pick-block targeting along the entire rendered belt.
+- An instant Smelter using 1,000 RF per smelted item and a 10,000 RF buffer. Items without a smelting recipe pass through unchanged.
+- Recipe-configured crafting machines:
 
-- `satiscraftory:conveyor` (plus matching block item and creative tab entry).
-- Automatically resolves shape and direction when placed near other conveyors.
-- Supports these conveyor shapes:
-  - `straight`
-  - `left`
-  - `right`
-  - `up`
-  - `down`
-- Moves items through a per-belt internal buffer (`5` slots by default).
-- Connects across belt networks with strict input/output validation.
-- Can pull items from adjacent inventories and push items into downstream inventories using Forge `ITEM_HANDLER` capability.
-- Renders client-side moving item visuals on belts.
+| Machine | Ingredient types | RF cost | RF buffer |
+| --- | --- | --- | --- |
+| Constructor | 1 | 500 per output item | 5,000 |
+| Assembler | Up to 2 | 1,000 per craft | 10,000 |
+| Manufacturer | Up to 4 | 4,000 per craft | 40,000 |
 
-## Current Scope / Limitations
+Select a crafting output using the ghost template slot or drag an item from JEI, then choose a supported recipe. Assemblers and Manufacturers use one buffer per item type, capped at two crafts' worth. Existing surplus remains available to craft or remove. Crafting remainders and blocked outputs are preserved.
 
-- Only the conveyor block is implemented at this time.
-- All six belt tiers have horizontal and vertical 3×3 crafting recipes. Tiers 2–6 consume one belt from the previous tier.
-- Extra runtime mod jars in `extra-mods-1.20.1/` are loaded only for local runtime/dev and are not bundled into this mod jar.
+JEI and Patchouli are optional. Extra runtime jars in `extra-mods-1.20.1/` are used for local development and are not bundled into releases.
 
 ## Requirements
 
@@ -67,7 +61,7 @@ gradlew.bat clean build
 
 ### Build Outputs
 
-- Main jar: `build/libs/satiscraftory-1.0.0.jar`
+- Main jar: `build/libs/satiscraftory-1.1.0.jar`
 - Reobf output: `build/reobfJar/output.jar`
 
 This project also runs `deployToModpack` automatically after `build`, which copies the built jar to:
@@ -105,8 +99,8 @@ Runtime directories used by Gradle runs:
 ## Project Structure
 
 - Mod entrypoint: `src/main/java/art/arcane/satiscraftory/Satiscraftory.java`
-- Conveyor block logic: `src/main/java/art/arcane/satiscraftory/block/ConveyorStraightBlock.java`
-- Conveyor block entity / transport logic: `src/main/java/art/arcane/satiscraftory/block/entity/ConveyorStraightBlockEntity.java`
+- Conveyor block logic: `src/main/java/art/arcane/satiscraftory/block/ConveyorBlock.java`
+- Conveyor block entity / transport logic: `src/main/java/art/arcane/satiscraftory/block/entity/ConveyorBlockEntity.java`
 - Mod metadata: `src/main/resources/META-INF/mods.toml`
 - Build configuration: `build.gradle`, `gradle.properties`
 
