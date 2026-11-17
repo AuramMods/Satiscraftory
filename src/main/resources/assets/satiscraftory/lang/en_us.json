@@ -9,5 +9,6 @@
   "block.satiscraftory.splitter": "Splitter",
   "block.satiscraftory.merger": "Merger",
   "book.satiscraftory.name": "Satiscraftory Field Guide",
-  "book.satiscraftory.landing": "Build your first conveyor, choose a belt tier, and connect your production lines.$(br2)Start with $(l:satiscraftory:basics/first_belt)Your First Belt$(/l), or browse the tier recipes and routing blocks."
+  "book.satiscraftory.landing": "Build your first conveyor, choose a belt tier, and connect your production lines.$(br2)Start with $(l:satiscraftory:basics/first_belt)Your First Belt$(/l), or browse the tier recipes and routing blocks.",
+  "block.satiscraftory.smelter": "Smelter"
 }

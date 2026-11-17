@@ -260,6 +260,10 @@ public class ConveyorItem extends BlockItem {
         if (!face.getAxis().isHorizontal()) {
             return false;
         }
+        BlockState state = player.level().getBlockState(pos);
+        if (state.getBlock() instanceof ConveyorConnectable machine) {
+            return face == (starting ? machine.getOutputDirection(state) : machine.getInputDirection(state));
+        }
         BlockEntity entity = player.level().getBlockEntity(pos);
         if (entity instanceof MergerBlockEntity merger) {
             return starting ? merger.canExtractFromSide(face) : merger.canInsertFromSide(face);
@@ -418,8 +422,9 @@ public class ConveyorItem extends BlockItem {
                     : state.getValue(ConveyorBlock.FACING).getOpposite() == face;
             return fits ? NeighborPort.CONNECTED : NeighborPort.BLOCKED;
         }
-        if (state.getBlock() instanceof ConveyorConnectable) {
-            return NeighborPort.CONNECTED;
+        if (state.getBlock() instanceof ConveyorConnectable machine) {
+            Direction port = source ? machine.getOutputDirection(state) : machine.getInputDirection(state);
+            return face == port ? NeighborPort.CONNECTED : NeighborPort.BLOCKED;
         }
         if (blockEntity == null) {
             return NeighborPort.OPEN;

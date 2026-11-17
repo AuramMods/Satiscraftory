@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "satiscraftory:block/smelter"
+    },
+    "facing=east": {
+      "model": "satiscraftory:block/smelter",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "satiscraftory:block/smelter",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "satiscraftory:block/smelter",
+      "y": 270
+    }
+  }
+}

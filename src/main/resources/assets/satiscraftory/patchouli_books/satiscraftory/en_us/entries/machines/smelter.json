@@ -1,0 +1,28 @@
+{
+  "name": "Smelter",
+  "icon": "satiscraftory:smelter",
+  "category": "satiscraftory:machines",
+  "sortnum": 0,
+  "pages": [
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:smelter",
+      "text": "Gold ingots at the corners, a redstone block at the top, iron bars at the other edges, and a furnace in the center."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Instant Smelting",
+      "text": "The Smelter applies a furnace smelting recipe as an item enters, then pushes the result to its output in the same tick.$(br2)Each smelted input item costs $(thing)1,000 RF$(). Items without a furnace recipe pass through unchanged and use no RF."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Item Connections",
+      "text": "The furnace face is the input and faces you when placed. The opposite blast-furnace face is the output.$(br2)Finish an incoming belt on the input face. Click the output face to start an outgoing belt.$(br2)Smeltable inputs wait upstream while power or output space is unavailable."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Power",
+      "text": "Connect Forge Energy cables or generators to any of the four copper faces, including the top and bottom.$(br2)The internal buffer holds $(thing)10,000 RF$(). It can receive all missing energy in one tick, subject to the supply available from your power source."
+    }
+  ]
+}

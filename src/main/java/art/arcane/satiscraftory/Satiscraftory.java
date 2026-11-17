@@ -4,11 +4,13 @@ import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import art.arcane.satiscraftory.block.MergerBlock;
 import art.arcane.satiscraftory.block.SplitterBlock;
+import art.arcane.satiscraftory.block.SmelterBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity.SplineVisualItemEntity;
 import art.arcane.satiscraftory.block.entity.ConveyorEndBlockEntity;
 import art.arcane.satiscraftory.block.entity.MergerBlockEntity;
 import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
+import art.arcane.satiscraftory.block.entity.SmelterBlockEntity;
 import art.arcane.satiscraftory.config.BeltClientConfig;
 import art.arcane.satiscraftory.data.ConveyorTier;
 import art.arcane.satiscraftory.item.ConveyorItem;
@@ -73,6 +75,10 @@ public class Satiscraftory {
             "merger",
             () -> new MergerBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL))
     );
+    public static final RegistryObject<Block> SMELTER = BLOCKS.register(
+            "smelter",
+            () -> new SmelterBlock(BlockBehaviour.Properties.of().strength(3.5F).sound(SoundType.METAL).requiresCorrectToolForDrops())
+    );
 
     public static final RegistryObject<Item> CONVEYOR_1_ITEM = registerConveyorItem("conveyor_1", CONVEYOR_1);
     public static final RegistryObject<Item> CONVEYOR_2_ITEM = registerConveyorItem("conveyor_2", CONVEYOR_2);
@@ -82,6 +88,7 @@ public class Satiscraftory {
     public static final RegistryObject<Item> CONVEYOR_6_ITEM = registerConveyorItem("conveyor_6", CONVEYOR_6);
     public static final RegistryObject<Item> SPLITTER_ITEM = ITEMS.register("splitter", () -> new BlockItem(SPLITTER.get(), new Item.Properties()));
     public static final RegistryObject<Item> MERGER_ITEM = ITEMS.register("merger", () -> new BlockItem(MERGER.get(), new Item.Properties()));
+    public static final RegistryObject<Item> SMELTER_ITEM = ITEMS.register("smelter", () -> new BlockItem(SMELTER.get(), new Item.Properties()));
 
     public static final RegistryObject<BlockEntityType<ConveyorBlockEntity>> CONVEYOR_BLOCK_ENTITY = BLOCK_ENTITIES.register(
             "conveyor_1",
@@ -107,6 +114,10 @@ public class Satiscraftory {
             "merger",
             () -> BlockEntityType.Builder.of(MergerBlockEntity::new, MERGER.get()).build(null)
     );
+    public static final RegistryObject<BlockEntityType<SmelterBlockEntity>> SMELTER_BLOCK_ENTITY = BLOCK_ENTITIES.register(
+            "smelter",
+            () -> BlockEntityType.Builder.of(SmelterBlockEntity::new, SMELTER.get()).build(null)
+    );
 
     public static final RegistryObject<CreativeModeTab> TAB = CREATIVE_TABS.register(MODID+"_tab", () -> CreativeModeTab.builder()
             .title(Component.literal("Satiscraftory"))
@@ -120,6 +131,7 @@ public class Satiscraftory {
                 output.accept(CONVEYOR_6_ITEM.get());
                 output.accept(SPLITTER_ITEM.get());
                 output.accept(MERGER_ITEM.get());
+                output.accept(SMELTER_ITEM.get());
             })
             .build());
 

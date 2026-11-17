@@ -1,0 +1,6 @@
+{
+  "name": "Machines",
+  "description": "Power machines to transform items as they pass through your production line.",
+  "icon": "satiscraftory:smelter",
+  "sortnum": 30
+}
