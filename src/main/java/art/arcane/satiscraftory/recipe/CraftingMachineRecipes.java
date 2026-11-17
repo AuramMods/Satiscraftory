@@ -55,7 +55,7 @@ public final class CraftingMachineRecipes {
         return List.copyOf(choices);
     }
 
-    /** Tests a partial delivery without reserving both buffers for one side of a two-type recipe. */
+    /** Tests a partial delivery while reserving enough buffers for all missing ingredient types. */
     public static boolean canComplete(Level level, ResourceLocation id, List<ItemStack> proposed, ItemStack requested) {
         var found = level.getRecipeManager().byKey(id);
         if (found.isEmpty() || !(found.get() instanceof CraftingRecipe recipe)) {

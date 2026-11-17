@@ -1,0 +1,38 @@
+{
+  "name": "Manufacturer",
+  "icon": "satiscraftory:manufacturer",
+  "category": "satiscraftory:machines",
+  "sortnum": 30,
+  "pages": [
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:manufacturer",
+      "text": "Diamonds in the corners, iron bars above and below, Assemblers on the left and right, and a Mk.4 belt in the center."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Four Ingredient Types",
+      "text": "The Manufacturer crafts recipes using $(thing)one to four item types$(), including pistons, crossbows, and cakes.$(br2)It also handles Constructor and Assembler recipes. Each completed recipe batch costs $(thing)4,000 RF$(), regardless of how many items it produces."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Choose a Recipe",
+      "text": "Use the ghost $(thing)Template$() slot just like an Assembler: click with the desired output or drag it from JEI. No item is consumed.$(br2)Click a row to select a recipe alternative. All four ingredient icons and counts are shown; hover for full names. Scroll for more recipes."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Supply Ingredients",
+      "text": "Four internal buffers share the $(thing)three horizontal belt inputs$(). Any face except the output accepts items and RF.$(br2)Send the fourth ingredient over an input belt as well, using a Merger if needed. Room is reserved for missing ingredient types. The dropper face is the output."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Repeated Ingredients",
+      "text": "Ingredient buffers can hold enough repeated unstackable items for a full 3x3 recipe, such as the three milk buckets in cake.$(br2)Empty buckets and other crafting remainders leave through the output with the result. Taking ingredients by hand respects their normal stack limits."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Power and Output",
+      "text": "The buffer holds $(thing)40,000 RF$() and refills without a per-tick limit. A full buffer funds ten crafts.$(br2)Crafting is instant when ingredients, power, and output space are available. Blocked outputs and saved games preserve ingredients, paid work, results, and crafting remainders."
+    }
+  ]
+}

@@ -26,6 +26,7 @@ public final class SatiscraftoryClient {
         event.enqueueWork(() -> {
             MenuScreens.register(Satiscraftory.CONSTRUCTOR_MENU.get(), ConstructorScreen::new);
             MenuScreens.register(Satiscraftory.ASSEMBLER_MENU.get(), AssemblerScreen::new);
+            MenuScreens.register(Satiscraftory.MANUFACTURER_MENU.get(), ManufacturerScreen::new);
         });
     }
 

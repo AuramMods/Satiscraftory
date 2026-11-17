@@ -60,6 +60,11 @@ public abstract class CraftingMachineBlockEntity extends BlockEntity implements 
             }
 
             @Override
+            protected int getStackLimit(int slot, ItemStack stack) {
+                return inputLimit(stack);
+            }
+
+            @Override
             public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
                 return processing || isRemoved() || (level != null && level.isClientSide && !simulate)
                         ? stack : super.insertItem(slot, stack, simulate);
@@ -85,6 +90,11 @@ public abstract class CraftingMachineBlockEntity extends BlockEntity implements 
 
     public ItemStackHandler inputInventory() {
         return inventory;
+    }
+
+    public int inputLimit(ItemStack stack) {
+        // A 3x3 recipe may require repeated unstackable inputs, such as the three milk buckets in cake.
+        return Math.min(64, Math.max(9, stack.getMaxStackSize()));
     }
 
     public ItemStack template() {
@@ -198,7 +208,11 @@ public abstract class CraftingMachineBlockEntity extends BlockEntity implements 
                 }
                 // Keep inputs until the whole batch is funded, including recipes costing more than the RF buffer.
                 for (int slot = 0; slot < inventory.getSlots(); slot++) {
-                    inventory.extractItem(slot, craft.consumed()[slot], false);
+                    int consumed = craft.consumed()[slot];
+                    if (consumed > 0) {
+                        ItemStack stack = inventory.getStackInSlot(slot);
+                        inventory.setStackInSlot(slot, stack.copyWithCount(stack.getCount() - consumed));
+                    }
                 }
                 workCredit -= cost;
                 finished.add(craft.result());
@@ -237,7 +251,9 @@ public abstract class CraftingMachineBlockEntity extends BlockEntity implements 
         processing = true;
         try {
             for (int slot = 0; slot < inventory.getSlots(); slot++) {
-                drop(inventory.extractItem(slot, Integer.MAX_VALUE, false));
+                ItemStack stack = inventory.getStackInSlot(slot).copy();
+                inventory.setStackInSlot(slot, ItemStack.EMPTY);
+                drop(stack);
             }
             while (!finished.isEmpty()) {
                 drop(finished.remove());
@@ -248,8 +264,10 @@ public abstract class CraftingMachineBlockEntity extends BlockEntity implements 
     }
 
     private void drop(ItemStack stack) {
-        Containers.dropItemStack(level, worldPosition.getX() + 0.5D, worldPosition.getY() + 0.5D,
-                worldPosition.getZ() + 0.5D, stack);
+        while (!stack.isEmpty()) {
+            Containers.dropItemStack(level, worldPosition.getX() + 0.5D, worldPosition.getY() + 0.5D,
+                    worldPosition.getZ() + 0.5D, stack.split(stack.getMaxStackSize()));
+        }
     }
 
     @Override

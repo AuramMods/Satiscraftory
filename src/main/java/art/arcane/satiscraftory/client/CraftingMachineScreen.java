@@ -69,11 +69,14 @@ public class CraftingMachineScreen<T extends CraftingMachineMenu> extends Abstra
         drawSlot(graphics, 209, 34);
         graphics.drawString(font, Component.translatable("gui.satiscraftory.input"), leftPos + 15, topPos + 23, 0x49331f, false);
         graphics.drawString(font, Component.translatable("gui.satiscraftory.template"), leftPos + 199, topPos + 23, 0x49331f, false);
-        graphics.fill(leftPos + 80, topPos + 35, leftPos + 184, topPos + 45, 0xff594d3d);
+        boolean fourInputs = menu.machine().spec().inputSlots() > 2;
+        int powerLeft = fourInputs ? 108 : 80;
+        int powerWidth = 184 - powerLeft;
+        graphics.fill(leftPos + powerLeft, topPos + 35, leftPos + 184, topPos + 45, 0xff594d3d);
         int capacity = menu.machine().spec().energyCapacity();
-        int fill = 102 * menu.energy() / capacity;
-        graphics.fill(leftPos + 81, topPos + 36, leftPos + 81 + fill, topPos + 44, 0xffffba29);
-        graphics.drawString(font, String.format(java.util.Locale.ROOT, "%,d / %,d RF", menu.energy(), capacity), leftPos + 80, topPos + 49, 0x49331f, false);
+        int fill = (powerWidth - 2) * menu.energy() / capacity;
+        graphics.fill(leftPos + powerLeft + 1, topPos + 36, leftPos + powerLeft + 1 + fill, topPos + 44, 0xffffba29);
+        graphics.drawString(font, String.format(java.util.Locale.ROOT, "%,d / %,d RF", menu.energy(), capacity), leftPos + 80, topPos + (fourInputs ? 55 : 49), 0x49331f, false);
         graphics.drawString(font, Component.translatable("gui.satiscraftory.recipes", choices.size()), leftPos + 12, topPos + 66, 0x49331f, false);
         if (menu.workCredit() > 0) {
             graphics.drawString(font, Component.translatable("gui.satiscraftory.work_charge", menu.workCredit()), leftPos + 85, topPos + 66, 0x90500d, false);
@@ -93,9 +96,10 @@ public class CraftingMachineScreen<T extends CraftingMachineMenu> extends Abstra
             graphics.fill(leftPos + 12, y, leftPos + 238, y + ROW_HEIGHT - 1, selected ? 0xffe4ab4c : 0xffd8cbb3);
             for (int inputIndex = 0; inputIndex < choice.inputs().size(); inputIndex++) {
                 var input = choice.inputs().get(inputIndex);
-                int x = leftPos + 16 + 80 * inputIndex;
+                boolean compact = choice.inputs().size() > 2;
+                int x = leftPos + 16 + (compact ? 40 : 80) * inputIndex;
                 graphics.renderItem(input.stack(), x, y);
-                String text = input.count() + "x " + input.stack().getHoverName().getString();
+                String text = input.count() + "x" + (compact ? "" : " " + input.stack().getHoverName().getString());
                 int width = choice.inputs().size() == 1 ? 132 : 56;
                 graphics.drawString(font, font.plainSubstrByWidth(text, width), x + 20, y + 5, 0x392c1d, false);
             }
@@ -127,11 +131,13 @@ public class CraftingMachineScreen<T extends CraftingMachineMenu> extends Abstra
         int index = hoveredRecipe(mouseX, mouseY);
         if (index >= 0) {
             var choice = choices.get(index);
-            String ingredients = choice.inputs().stream().map(input -> input.count() + "x "
-                    + input.stack().getHoverName().getString()).collect(java.util.stream.Collectors.joining(" + "));
-            graphics.renderTooltip(font, List.of(Component.literal(ingredients + " → " + choice.result().getCount()
-                    + "x " + choice.result().getHoverName().getString()), Component.literal(choice.id().toString())),
-                    Optional.empty(), mouseX, mouseY);
+            var tooltip = new java.util.ArrayList<Component>();
+            for (var input : choice.inputs()) {
+                tooltip.add(Component.literal(input.count() + "x " + input.stack().getHoverName().getString()));
+            }
+            tooltip.add(Component.literal("→ " + choice.result().getCount() + "x " + choice.result().getHoverName().getString()));
+            tooltip.add(Component.literal(choice.id().toString()));
+            graphics.renderTooltip(font, tooltip, Optional.empty(), mouseX, mouseY);
         }
     }
 

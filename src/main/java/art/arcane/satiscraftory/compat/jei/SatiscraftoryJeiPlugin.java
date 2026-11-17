@@ -3,6 +3,7 @@ package art.arcane.satiscraftory.compat.jei;
 import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.client.ConstructorScreen;
 import art.arcane.satiscraftory.client.AssemblerScreen;
+import art.arcane.satiscraftory.client.ManufacturerScreen;
 import art.arcane.satiscraftory.client.CraftingMachineScreen;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
@@ -25,6 +26,7 @@ public final class SatiscraftoryJeiPlugin implements IModPlugin {
     public void registerGuiHandlers(IGuiHandlerRegistration registration) {
         registerGhostHandler(registration, ConstructorScreen.class);
         registerGhostHandler(registration, AssemblerScreen.class);
+        registerGhostHandler(registration, ManufacturerScreen.class);
     }
 
     private static <T extends CraftingMachineScreen<?>> void registerGhostHandler(IGuiHandlerRegistration registration, Class<T> type) {

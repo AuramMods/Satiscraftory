@@ -4,7 +4,6 @@ import art.arcane.satiscraftory.block.entity.CraftingMachineBlockEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.MenuType;
@@ -13,39 +12,25 @@ import net.minecraftforge.items.SlotItemHandler;
 
 public class CraftingMachineMenu extends AbstractContainerMenu {
     private final CraftingMachineBlockEntity machine;
-    private final ContainerData data;
+    private final MenuIntData data;
 
     protected CraftingMachineMenu(MenuType<?> type, int id, Inventory inventory, CraftingMachineBlockEntity machine) {
         super(type, id);
         this.machine = machine;
-        data = new ContainerData() {
-            private final int[] clientValues = new int[2];
-
-            @Override
-            public int get(int index) {
-                if (inventory.player.level().isClientSide) {
-                    return clientValues[index];
-                }
-                return index == 0 ? machine.powerStored() : machine.workCredit();
-            }
-
-            @Override
-            public void set(int index, int value) {
-                clientValues[index] = value;
-            }
-
-            @Override
-            public int getCount() {
-                return 2;
-            }
-        };
+        data = new MenuIntData(() -> inventory.player.level().isClientSide, machine::powerStored, machine::workCredit);
         addDataSlots(data);
         for (int slot = 0; slot < machine.spec().inputSlots(); slot++) {
             addSlot(new SlotItemHandler(machine.inputInventory(), slot, 18 + 20 * slot, 35) {
                 @Override
                 public int getMaxStackSize(ItemStack stack) {
                     // Forge's default implementation temporarily mutates the inventory to probe capacity.
-                    return Math.min(getMaxStackSize(), stack.getMaxStackSize());
+                    return machine.inputLimit(stack);
+                }
+
+                @Override
+                public ItemStack remove(int amount) {
+                    // Keep carried stacks within the item's ordinary limit when taking from a machine buffer.
+                    return super.remove(Math.min(amount, getItem().getMaxStackSize()));
                 }
             });
         }
@@ -64,11 +49,11 @@ public class CraftingMachineMenu extends AbstractContainerMenu {
     }
 
     public int energy() {
-        return data.get(0);
+        return data.value(0);
     }
 
     public int workCredit() {
-        return data.get(1);
+        return data.value(1);
     }
 
     @Override
@@ -95,8 +80,28 @@ public class CraftingMachineMenu extends AbstractContainerMenu {
         ItemStack stack = slot.getItem();
         ItemStack original = stack.copy();
         int inputs = machine.spec().inputSlots();
-        boolean moved = index < inputs ? moveItemStackTo(stack, inputs, slots.size(), true)
-                : moveItemStackTo(stack, 0, inputs, false);
+        if (index >= inputs) {
+            ItemStack remainder = stack.copy();
+            for (int input = 0; input < inputs && !remainder.isEmpty(); input++) {
+                remainder = machine.inputInventory().insertItem(input, remainder, false);
+            }
+            if (remainder.getCount() == original.getCount()) {
+                return ItemStack.EMPTY;
+            }
+            slot.setByPlayer(remainder);
+            slot.onTake(player, original.copyWithCount(original.getCount() - remainder.getCount()));
+            return original;
+        }
+        boolean moved = false;
+        while (!stack.isEmpty()) {
+            ItemStack transfer = stack.copyWithCount(Math.min(stack.getCount(), stack.getMaxStackSize()));
+            int amount = transfer.getCount();
+            if (!moveItemStackTo(transfer, inputs, slots.size(), true)) {
+                break;
+            }
+            stack.shrink(amount - transfer.getCount());
+            moved = true;
+        }
         if (!moved) {
             return ItemStack.EMPTY;
         }

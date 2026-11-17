@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "minecraft:block/diamond_block",
+    "north": "minecraft:block/dropper_front",
+    "south": "minecraft:block/smithing_table_side",
+    "east": "minecraft:block/smithing_table_side",
+    "west": "minecraft:block/smithing_table_side",
+    "up": "minecraft:block/crafting_table_top",
+    "down": "minecraft:block/diamond_block"
+  }
+}

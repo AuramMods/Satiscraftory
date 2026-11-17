@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    "IXI",
+    "ABA",
+    "IXI"
+  ],
+  "key": {
+    "I": {
+      "item": "minecraft:diamond"
+    },
+    "X": {
+      "item": "minecraft:iron_bars"
+    },
+    "A": {
+      "item": "satiscraftory:assembler"
+    },
+    "B": {
+      "item": "satiscraftory:conveyor_4"
+    }
+  },
+  "result": {
+    "item": "satiscraftory:manufacturer",
+    "count": 1
+  }
+}

@@ -9,6 +9,7 @@
     "satiscraftory:conveyor_6",
     "satiscraftory:smelter",
     "satiscraftory:constructor",
-    "satiscraftory:assembler"
+    "satiscraftory:assembler",
+    "satiscraftory:manufacturer"
   ]
 }

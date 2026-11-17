@@ -20,5 +20,7 @@
   "gui.satiscraftory.template_hint": "Click with an item or drag from JEI. Right-click to clear.",
   "block.satiscraftory.assembler": "Assembler",
   "gui.satiscraftory.no_recipes_1": "No single-ingredient recipes",
-  "gui.satiscraftory.no_recipes_2": "No recipes using up to two ingredients"
+  "gui.satiscraftory.no_recipes_2": "No recipes using up to two ingredients",
+  "block.satiscraftory.manufacturer": "Manufacturer",
+  "gui.satiscraftory.no_recipes_4": "No recipes using up to four ingredients"
 }
