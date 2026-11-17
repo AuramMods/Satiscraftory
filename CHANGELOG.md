@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Prevent crafting machines from losing an output item when a receiving belt pulls from a multi-item recipe batch. Six planks now deliver all three doors; a full stack delivers 30 doors and leaves four planks.
+
 ## 1.1.0 — 2026-11-17
 
 - Add the instant RF-powered Smelter with unchanged passthrough for items without a smelting recipe.

@@ -88,7 +88,7 @@ That destination is configured by `modpack_deploy` in `gradle.properties`.
 
 - Run client: `./gradlew runClient`
 - Run dedicated server: `./gradlew runServer`
-- Run game test server: `./gradlew runGameTestServer`
+- Run game test server: `./gradlew runGameTestServer` (includes the crafting-output conservation regressions in `src/gameTest`; these are excluded from production jars)
 - Generate data: `./gradlew runData`
 
 Runtime directories used by Gradle runs:

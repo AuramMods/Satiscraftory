@@ -408,7 +408,7 @@ public abstract class CraftingMachineBlockEntity extends BlockEntity implements 
                         finished.remove();
                     }
                     setChanged();
-                    process();
+                    // The receiving belt has not enqueued this extraction yet; pushing now would steal its input slot.
                 }
                 return extracted;
             }
