@@ -23,7 +23,10 @@ public final class SatiscraftoryClient {
 
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> MenuScreens.register(Satiscraftory.CONSTRUCTOR_MENU.get(), ConstructorScreen::new));
+        event.enqueueWork(() -> {
+            MenuScreens.register(Satiscraftory.CONSTRUCTOR_MENU.get(), ConstructorScreen::new);
+            MenuScreens.register(Satiscraftory.ASSEMBLER_MENU.get(), AssemblerScreen::new);
+        });
     }
 
     @SubscribeEvent

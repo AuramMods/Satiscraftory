@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "minecraft:block/gold_block",
+    "north": "minecraft:block/dropper_front",
+    "south": "minecraft:block/piston_side",
+    "east": "minecraft:block/piston_side",
+    "west": "minecraft:block/piston_side",
+    "up": "minecraft:block/crafting_table_top",
+    "down": "minecraft:block/gold_block"
+  }
+}

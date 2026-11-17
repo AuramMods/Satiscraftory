@@ -6,6 +6,7 @@ import art.arcane.satiscraftory.block.MergerBlock;
 import art.arcane.satiscraftory.block.SplitterBlock;
 import art.arcane.satiscraftory.block.SmelterBlock;
 import art.arcane.satiscraftory.block.ConstructorBlock;
+import art.arcane.satiscraftory.block.AssemblerBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity.SplineVisualItemEntity;
 import art.arcane.satiscraftory.block.entity.ConveyorEndBlockEntity;
@@ -13,13 +14,15 @@ import art.arcane.satiscraftory.block.entity.MergerBlockEntity;
 import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
 import art.arcane.satiscraftory.block.entity.SmelterBlockEntity;
 import art.arcane.satiscraftory.block.entity.ConstructorBlockEntity;
+import art.arcane.satiscraftory.block.entity.AssemblerBlockEntity;
 import art.arcane.satiscraftory.config.BeltClientConfig;
 import art.arcane.satiscraftory.data.ConveyorTier;
 import art.arcane.satiscraftory.item.ConveyorItem;
 import art.arcane.satiscraftory.network.BeltInteractionNetwork;
 import art.arcane.satiscraftory.network.BeltPlacementNetwork;
-import art.arcane.satiscraftory.network.ConstructorNetwork;
+import art.arcane.satiscraftory.network.CraftingMachineNetwork;
 import art.arcane.satiscraftory.menu.ConstructorMenu;
+import art.arcane.satiscraftory.menu.AssemblerMenu;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -55,6 +58,8 @@ public class Satiscraftory {
     public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, MODID);
     public static final RegistryObject<MenuType<ConstructorMenu>> CONSTRUCTOR_MENU = MENUS.register(
             "constructor", () -> IForgeMenuType.create(ConstructorMenu::new));
+    public static final RegistryObject<MenuType<AssemblerMenu>> ASSEMBLER_MENU = MENUS.register(
+            "assembler", () -> IForgeMenuType.create(AssemblerMenu::new));
 
     public static final RegistryObject<EntityType<SplineVisualItemEntity>> CONVEYOR_ITEM_VISUAL = ENTITIES.register(
             "conveyor_item_visual",
@@ -93,6 +98,11 @@ public class Satiscraftory {
             () -> new ConstructorBlock(BlockBehaviour.Properties.of().strength(3.5F).sound(SoundType.METAL).requiresCorrectToolForDrops())
     );
 
+    public static final RegistryObject<Block> ASSEMBLER = BLOCKS.register(
+            "assembler",
+            () -> new AssemblerBlock(BlockBehaviour.Properties.of().strength(3.5F).sound(SoundType.METAL).requiresCorrectToolForDrops())
+    );
+
     public static final RegistryObject<Item> CONVEYOR_1_ITEM = registerConveyorItem("conveyor_1", CONVEYOR_1);
     public static final RegistryObject<Item> CONVEYOR_2_ITEM = registerConveyorItem("conveyor_2", CONVEYOR_2);
     public static final RegistryObject<Item> CONVEYOR_3_ITEM = registerConveyorItem("conveyor_3", CONVEYOR_3);
@@ -103,6 +113,8 @@ public class Satiscraftory {
     public static final RegistryObject<Item> MERGER_ITEM = ITEMS.register("merger", () -> new BlockItem(MERGER.get(), new Item.Properties()));
     public static final RegistryObject<Item> SMELTER_ITEM = ITEMS.register("smelter", () -> new BlockItem(SMELTER.get(), new Item.Properties()));
     public static final RegistryObject<Item> CONSTRUCTOR_ITEM = ITEMS.register("constructor", () -> new BlockItem(CONSTRUCTOR.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> ASSEMBLER_ITEM = ITEMS.register("assembler", () -> new BlockItem(ASSEMBLER.get(), new Item.Properties()));
 
     public static final RegistryObject<BlockEntityType<ConveyorBlockEntity>> CONVEYOR_BLOCK_ENTITY = BLOCK_ENTITIES.register(
             "conveyor_1",
@@ -137,6 +149,11 @@ public class Satiscraftory {
             () -> BlockEntityType.Builder.of(ConstructorBlockEntity::new, CONSTRUCTOR.get()).build(null)
     );
 
+    public static final RegistryObject<BlockEntityType<AssemblerBlockEntity>> ASSEMBLER_BLOCK_ENTITY = BLOCK_ENTITIES.register(
+            "assembler",
+            () -> BlockEntityType.Builder.of(AssemblerBlockEntity::new, ASSEMBLER.get()).build(null)
+    );
+
     public static final RegistryObject<CreativeModeTab> TAB = CREATIVE_TABS.register(MODID+"_tab", () -> CreativeModeTab.builder()
             .title(Component.literal("Satiscraftory"))
             .icon(() -> new ItemStack(CONVEYOR_1_ITEM.get()))
@@ -151,6 +168,7 @@ public class Satiscraftory {
                 output.accept(MERGER_ITEM.get());
                 output.accept(SMELTER_ITEM.get());
                 output.accept(CONSTRUCTOR_ITEM.get());
+                output.accept(ASSEMBLER_ITEM.get());
             })
             .build());
 
@@ -158,7 +176,7 @@ public class Satiscraftory {
     public Satiscraftory(FMLJavaModLoadingContext context) {
         context.registerConfig(ModConfig.Type.CLIENT, BeltClientConfig.SPEC);
         BeltPlacementNetwork.register();
-        ConstructorNetwork.register();
+        CraftingMachineNetwork.register();
         BeltInteractionNetwork.register();
         IEventBus modEventBus = context.getModEventBus();
         BLOCKS.register(modEventBus);

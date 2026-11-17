@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "satiscraftory:block/assembler"
+    },
+    "facing=east": {
+      "model": "satiscraftory:block/assembler",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "satiscraftory:block/assembler",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "satiscraftory:block/assembler",
+      "y": 270
+    }
+  }
+}

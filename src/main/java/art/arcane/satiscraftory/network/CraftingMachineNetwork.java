@@ -1,20 +1,20 @@
 package art.arcane.satiscraftory.network;
 
 import art.arcane.satiscraftory.Satiscraftory;
-import art.arcane.satiscraftory.menu.ConstructorMenu;
+import art.arcane.satiscraftory.menu.CraftingMachineMenu;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 
-public final class ConstructorNetwork {
+public final class CraftingMachineNetwork {
     private static final String PROTOCOL = "1";
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             ResourceLocation.fromNamespaceAndPath(Satiscraftory.MODID, "constructor"),
             () -> PROTOCOL, PROTOCOL::equals, PROTOCOL::equals);
 
-    private ConstructorNetwork() {}
+    private CraftingMachineNetwork() {}
 
     public static void register() {
         CHANNEL.messageBuilder(Template.class, 0, NetworkDirection.PLAY_TO_SERVER)
@@ -25,9 +25,9 @@ public final class ConstructorNetwork {
                 .decoder(buffer -> new Template(buffer.readVarInt(), buffer.readItem()))
                 .consumerMainThread((message, context) -> {
                     var player = context.get().getSender();
-                    if (player != null && player.containerMenu instanceof ConstructorMenu menu
+                    if (player != null && player.containerMenu instanceof CraftingMachineMenu menu
                             && menu.containerId == message.menuId() && menu.stillValid(player)) {
-                        menu.constructor().setTemplate(message.stack());
+                        menu.machine().setTemplate(message.stack());
                     }
                 }).add();
     }

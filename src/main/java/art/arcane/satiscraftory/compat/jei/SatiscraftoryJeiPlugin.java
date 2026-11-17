@@ -2,6 +2,8 @@ package art.arcane.satiscraftory.compat.jei;
 
 import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.client.ConstructorScreen;
+import art.arcane.satiscraftory.client.AssemblerScreen;
+import art.arcane.satiscraftory.client.CraftingMachineScreen;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.gui.handlers.IGhostIngredientHandler;
@@ -21,9 +23,14 @@ public final class SatiscraftoryJeiPlugin implements IModPlugin {
 
     @Override
     public void registerGuiHandlers(IGuiHandlerRegistration registration) {
-        registration.addGhostIngredientHandler(ConstructorScreen.class, new IGhostIngredientHandler<ConstructorScreen>() {
+        registerGhostHandler(registration, ConstructorScreen.class);
+        registerGhostHandler(registration, AssemblerScreen.class);
+    }
+
+    private static <T extends CraftingMachineScreen<?>> void registerGhostHandler(IGuiHandlerRegistration registration, Class<T> type) {
+        registration.addGhostIngredientHandler(type, new IGhostIngredientHandler<T>() {
             @Override
-            public <I> List<Target<I>> getTargetsTyped(ConstructorScreen screen, ITypedIngredient<I> ingredient, boolean doStart) {
+            public <I> List<Target<I>> getTargetsTyped(T screen, ITypedIngredient<I> ingredient, boolean doStart) {
                 var stack = ingredient.getItemStack();
                 if (stack.isEmpty()) {
                     return List.of();

@@ -17,6 +17,8 @@
   "gui.satiscraftory.recipes": "Recipes (%s)",
   "gui.satiscraftory.work_charge": "Batch charge %s RF",
   "gui.satiscraftory.choose_output": "Click a desired output above",
-  "gui.satiscraftory.no_recipes": "No single-ingredient recipes",
-  "gui.satiscraftory.template_hint": "Click with an item or drag from JEI. Right-click to clear."
+  "gui.satiscraftory.template_hint": "Click with an item or drag from JEI. Right-click to clear.",
+  "block.satiscraftory.assembler": "Assembler",
+  "gui.satiscraftory.no_recipes_1": "No single-ingredient recipes",
+  "gui.satiscraftory.no_recipes_2": "No recipes using up to two ingredients"
 }

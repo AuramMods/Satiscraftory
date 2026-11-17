@@ -1,0 +1,38 @@
+{
+  "name": "Assembler",
+  "icon": "satiscraftory:assembler",
+  "category": "satiscraftory:machines",
+  "sortnum": 20,
+  "pages": [
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:assembler",
+      "text": "Gold ingots in the corners, a redstone block above, Constructors on the left and right, a Mk.2 belt in the center, and iron bars below."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Two Ingredients",
+      "text": "The Assembler crafts recipes using $(thing)one or two item types$(), including torches and most tools.$(br2)It also handles Constructor recipes. Recipes requiring three or more item types are excluded."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Choose a Recipe",
+      "text": "Use the ghost $(thing)Template$() slot just like a Constructor: click with the desired output or drag it from JEI. No item is consumed.$(br2)Click a recipe row to select an alternative. Scroll to see more choices. Actual recipe quantities are preserved."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Supply Ingredients",
+      "text": "Two real inventory slots buffer ingredients. Any face except the output accepts items and RF. Three horizontal belts can feed it together.$(br2)Inputs share both buffers; room is reserved for a missing ingredient. The dropper face is the output."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Power and Output",
+      "text": "Each complete $(thing)craft$() costs $(thing)1,000 RF$(), with a $(thing)10,000 RF$() buffer and no per-tick intake limit.$(br2)For example, 1 coal + 1 stick makes 4 torches for 1,000 RF total. Crafting is instant when ingredients, power, and output space are available."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Safe Buffering",
+      "text": "Blocked outputs preserve ingredients and power. Completed results and crafting remainders wait safely for output space.$(br2)Changing recipes preserves stored items. Remove leftover ingredients from the two inventory slots if they do not fit the new recipe."
+    }
+  ]
+}
