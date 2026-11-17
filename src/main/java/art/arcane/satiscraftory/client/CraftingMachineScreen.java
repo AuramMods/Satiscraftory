@@ -96,16 +96,15 @@ public class CraftingMachineScreen<T extends CraftingMachineMenu> extends Abstra
             graphics.fill(leftPos + 12, y, leftPos + 238, y + ROW_HEIGHT - 1, selected ? 0xffe4ab4c : 0xffd8cbb3);
             for (int inputIndex = 0; inputIndex < choice.inputs().size(); inputIndex++) {
                 var input = choice.inputs().get(inputIndex);
-                boolean compact = choice.inputs().size() > 2;
-                int x = leftPos + 16 + (compact ? 40 : 80) * inputIndex;
-                graphics.renderItem(input.stack(), x, y);
-                String text = input.count() + "x" + (compact ? "" : " " + input.stack().getHoverName().getString());
-                int width = choice.inputs().size() == 1 ? 132 : 56;
-                graphics.drawString(font, font.plainSubstrByWidth(text, width), x + 20, y + 5, 0x392c1d, false);
+                int x = leftPos + 16 + 20 * inputIndex;
+                ItemStack stack = input.stack().copyWithCount(input.count());
+                graphics.renderItem(stack, x, y);
+                graphics.renderItemDecorations(font, stack, x, y);
             }
-            graphics.drawString(font, "→", leftPos + 177, y + 5, 0x8b4c09, false);
-            graphics.renderItem(choice.result(), leftPos + 194, y);
-            graphics.drawString(font, Integer.toString(choice.result().getCount()), leftPos + 214, y + 5, 0x392c1d, false);
+            int arrowX = leftPos + 16 + 20 * choice.inputs().size();
+            graphics.drawString(font, "→", arrowX + 4, y + 5, 0x8b4c09, false);
+            graphics.renderItem(choice.result(), arrowX + 20, y);
+            graphics.renderItemDecorations(font, choice.result(), arrowX + 20, y);
         }
         if (choices.size() > VISIBLE_ROWS) {
             int height = VISIBLE_ROWS * ROW_HEIGHT;
