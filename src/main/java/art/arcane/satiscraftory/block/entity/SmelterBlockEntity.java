@@ -7,7 +7,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.util.Mth;
 import net.minecraft.world.Container;
 import net.minecraft.world.Containers;
 import net.minecraft.world.SimpleContainer;
@@ -22,7 +21,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
-import net.minecraftforge.energy.EnergyStorage;
 import net.minecraftforge.energy.IEnergyStorage;
 import net.minecraftforge.items.IItemHandler;
 
@@ -34,7 +32,11 @@ public final class SmelterBlockEntity extends BlockEntity {
     public static final int ENERGY_PER_ITEM = 1_000;
 
     private final RecipeManager.CachedCheck<Container, SmeltingRecipe> recipes = RecipeManager.createCheck(RecipeType.SMELTING);
-    private final PowerBuffer power = new PowerBuffer();
+    private final MachineEnergyStorage power = new MachineEnergyStorage(ENERGY_CAPACITY,
+            () -> level != null && !level.isClientSide && !isRemoved(), previous -> {
+                setChanged();
+                syncPowerAvailability(previous);
+            });
     private ItemStack pendingOutput = ItemStack.EMPTY;
     private boolean transferring;
     private LazyOptional<IItemHandler> input = LazyOptional.empty();
@@ -229,36 +231,6 @@ public final class SmelterBlockEntity extends BlockEntity {
             return side == inputSide() || side == outputSide() ? LazyOptional.empty() : energy.cast();
         }
         return super.getCapability(capability, side);
-    }
-
-    private final class PowerBuffer extends EnergyStorage {
-        private PowerBuffer() {
-            super(ENERGY_CAPACITY, Integer.MAX_VALUE, 0);
-        }
-
-        @Override
-        public int receiveEnergy(int amount, boolean simulate) {
-            if (amount <= 0 || level == null || level.isClientSide || isRemoved()) {
-                return 0;
-            }
-            int previous = getEnergyStored();
-            int received = super.receiveEnergy(amount, simulate);
-            if (!simulate && received > 0) {
-                setChanged();
-                syncPowerAvailability(previous);
-            }
-            return received;
-        }
-
-        private void consume(int amount) {
-            int previous = energy;
-            energy -= amount;
-            syncPowerAvailability(previous);
-        }
-
-        private void restore(int amount) {
-            energy = Mth.clamp(amount, 0, ENERGY_CAPACITY);
-        }
     }
 
     private final class ItemPort implements IItemHandler {

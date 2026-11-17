@@ -79,5 +79,12 @@ description='''${mod_description}'''
     ordering="AFTER"
     side="BOTH"
 
+[[dependencies.${mod_id}]]
+    modId="jei"
+    mandatory=false
+    versionRange="[15,)"
+    ordering="AFTER"
+    side="CLIENT"
+
 [[mixins]]
 config = "mixins.satiscraftory.json"

@@ -1,0 +1,33 @@
+{
+  "name": "Constructor",
+  "icon": "satiscraftory:constructor",
+  "category": "satiscraftory:machines",
+  "sortnum": 10,
+  "pages": [
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:constructor",
+      "text": "Iron nuggets in the corners, redstone block above, iron bars at the remaining edges, and a crafting table in the center."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Choose an Output",
+      "text": "Right-click to open the Constructor. Click a desired output item onto the $(thing)Template$() slot. Your item stays on the cursor.$(br2)With JEI installed, drag its item directly onto that slot. Right-click the template to clear it."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Recipe Alternatives",
+      "text": "The list shows crafting recipes that use one ingredient type. Click a row to select it; scroll for more.$(br2)Vanilla stone bricks use 4 stone and make 4 bricks. A modded recipe using cracked bricks appears as another option. Actual recipe quantities are preserved."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Supply Materials",
+      "text": "One real inventory slot buffers the chosen ingredient. All faces except the output accept items, so three horizontal supply belts can feed it together.$(br2)The dropper face is the output and points away from you on placement. Inputs stay in the buffer until a batch is fully funded."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Power and Results",
+      "text": "The buffer holds $(thing)5,000 RF$() and refills without a per-tick limit. Each output item costs $(thing)500 RF$(). Supply power on any input face.$(br2)Large batches accumulate their charge across refills. Completed results and crafting remainders wait safely for output space."
+    }
+  ]
+}

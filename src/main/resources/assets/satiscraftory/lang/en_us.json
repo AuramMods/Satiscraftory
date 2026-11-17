@@ -10,5 +10,13 @@
   "block.satiscraftory.merger": "Merger",
   "book.satiscraftory.name": "Satiscraftory Field Guide",
   "book.satiscraftory.landing": "Build your first conveyor, choose a belt tier, and connect your production lines.$(br2)Start with $(l:satiscraftory:basics/first_belt)Your First Belt$(/l), or browse the tier recipes and routing blocks.",
-  "block.satiscraftory.smelter": "Smelter"
+  "block.satiscraftory.smelter": "Smelter",
+  "block.satiscraftory.constructor": "Constructor",
+  "gui.satiscraftory.input": "Input",
+  "gui.satiscraftory.template": "Template",
+  "gui.satiscraftory.recipes": "Recipes (%s)",
+  "gui.satiscraftory.work_charge": "Batch charge %s RF",
+  "gui.satiscraftory.choose_output": "Click a desired output above",
+  "gui.satiscraftory.no_recipes": "No single-ingredient recipes",
+  "gui.satiscraftory.template_hint": "Click with an item or drag from JEI. Right-click to clear."
 }

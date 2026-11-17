@@ -5,17 +5,21 @@ import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import art.arcane.satiscraftory.block.MergerBlock;
 import art.arcane.satiscraftory.block.SplitterBlock;
 import art.arcane.satiscraftory.block.SmelterBlock;
+import art.arcane.satiscraftory.block.ConstructorBlock;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity;
 import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity.SplineVisualItemEntity;
 import art.arcane.satiscraftory.block.entity.ConveyorEndBlockEntity;
 import art.arcane.satiscraftory.block.entity.MergerBlockEntity;
 import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
 import art.arcane.satiscraftory.block.entity.SmelterBlockEntity;
+import art.arcane.satiscraftory.block.entity.ConstructorBlockEntity;
 import art.arcane.satiscraftory.config.BeltClientConfig;
 import art.arcane.satiscraftory.data.ConveyorTier;
 import art.arcane.satiscraftory.item.ConveyorItem;
 import art.arcane.satiscraftory.network.BeltInteractionNetwork;
 import art.arcane.satiscraftory.network.BeltPlacementNetwork;
+import art.arcane.satiscraftory.network.ConstructorNetwork;
+import art.arcane.satiscraftory.menu.ConstructorMenu;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -26,11 +30,13 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.common.extensions.IForgeMenuType;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -46,6 +52,9 @@ public class Satiscraftory {
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, MODID);
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, MODID);
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MODID);
+    public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, MODID);
+    public static final RegistryObject<MenuType<ConstructorMenu>> CONSTRUCTOR_MENU = MENUS.register(
+            "constructor", () -> IForgeMenuType.create(ConstructorMenu::new));
 
     public static final RegistryObject<EntityType<SplineVisualItemEntity>> CONVEYOR_ITEM_VISUAL = ENTITIES.register(
             "conveyor_item_visual",
@@ -79,6 +88,10 @@ public class Satiscraftory {
             "smelter",
             () -> new SmelterBlock(BlockBehaviour.Properties.of().strength(3.5F).sound(SoundType.METAL).requiresCorrectToolForDrops())
     );
+    public static final RegistryObject<Block> CONSTRUCTOR = BLOCKS.register(
+            "constructor",
+            () -> new ConstructorBlock(BlockBehaviour.Properties.of().strength(3.5F).sound(SoundType.METAL).requiresCorrectToolForDrops())
+    );
 
     public static final RegistryObject<Item> CONVEYOR_1_ITEM = registerConveyorItem("conveyor_1", CONVEYOR_1);
     public static final RegistryObject<Item> CONVEYOR_2_ITEM = registerConveyorItem("conveyor_2", CONVEYOR_2);
@@ -89,6 +102,7 @@ public class Satiscraftory {
     public static final RegistryObject<Item> SPLITTER_ITEM = ITEMS.register("splitter", () -> new BlockItem(SPLITTER.get(), new Item.Properties()));
     public static final RegistryObject<Item> MERGER_ITEM = ITEMS.register("merger", () -> new BlockItem(MERGER.get(), new Item.Properties()));
     public static final RegistryObject<Item> SMELTER_ITEM = ITEMS.register("smelter", () -> new BlockItem(SMELTER.get(), new Item.Properties()));
+    public static final RegistryObject<Item> CONSTRUCTOR_ITEM = ITEMS.register("constructor", () -> new BlockItem(CONSTRUCTOR.get(), new Item.Properties()));
 
     public static final RegistryObject<BlockEntityType<ConveyorBlockEntity>> CONVEYOR_BLOCK_ENTITY = BLOCK_ENTITIES.register(
             "conveyor_1",
@@ -118,6 +132,10 @@ public class Satiscraftory {
             "smelter",
             () -> BlockEntityType.Builder.of(SmelterBlockEntity::new, SMELTER.get()).build(null)
     );
+    public static final RegistryObject<BlockEntityType<ConstructorBlockEntity>> CONSTRUCTOR_BLOCK_ENTITY = BLOCK_ENTITIES.register(
+            "constructor",
+            () -> BlockEntityType.Builder.of(ConstructorBlockEntity::new, CONSTRUCTOR.get()).build(null)
+    );
 
     public static final RegistryObject<CreativeModeTab> TAB = CREATIVE_TABS.register(MODID+"_tab", () -> CreativeModeTab.builder()
             .title(Component.literal("Satiscraftory"))
@@ -132,6 +150,7 @@ public class Satiscraftory {
                 output.accept(SPLITTER_ITEM.get());
                 output.accept(MERGER_ITEM.get());
                 output.accept(SMELTER_ITEM.get());
+                output.accept(CONSTRUCTOR_ITEM.get());
             })
             .build());
 
@@ -139,6 +158,7 @@ public class Satiscraftory {
     public Satiscraftory(FMLJavaModLoadingContext context) {
         context.registerConfig(ModConfig.Type.CLIENT, BeltClientConfig.SPEC);
         BeltPlacementNetwork.register();
+        ConstructorNetwork.register();
         BeltInteractionNetwork.register();
         IEventBus modEventBus = context.getModEventBus();
         BLOCKS.register(modEventBus);
@@ -146,6 +166,7 @@ public class Satiscraftory {
         BLOCK_ENTITIES.register(modEventBus);
         ENTITIES.register(modEventBus);
         CREATIVE_TABS.register(modEventBus);
+        MENUS.register(modEventBus);
         modEventBus.register(this);
     }
 

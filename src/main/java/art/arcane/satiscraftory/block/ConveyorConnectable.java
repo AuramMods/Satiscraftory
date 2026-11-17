@@ -8,6 +8,14 @@ public interface ConveyorConnectable {
 
     Direction getOutputDirection(BlockState state);
 
+    default boolean acceptsInput(BlockState state, Direction side) {
+        return side == getInputDirection(state);
+    }
+
+    default boolean providesOutput(BlockState state, Direction side) {
+        return side == getOutputDirection(state);
+    }
+
     BlockState withInputConnection(BlockState state, Direction inputDirection);
 
     BlockState withOutputConnection(BlockState state, Direction outputDirection);
