@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.1 — 2026-11-17
 
 - Prevent crafting machines from losing an output item when a receiving belt pulls from a multi-item recipe batch. Six planks now deliver all three doors; a full stack delivers 30 doors and leaves four planks.
 

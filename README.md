@@ -8,7 +8,7 @@ Satiscraftory is a Minecraft Forge mod that currently adds a functional conveyor
 | --- | --- |
 | Mod ID | `satiscraftory` |
 | Mod Name | `Satiscraftory` |
-| Mod Version | `1.1.0` |
+| Mod Version | `1.1.1` |
 | Minecraft Version | `1.20.1` |
 | Forge Version | `47.4.10` |
 | Java Target | `17` (toolchain) |
@@ -61,7 +61,7 @@ gradlew.bat clean build
 
 ### Build Outputs
 
-- Main jar: `build/libs/satiscraftory-1.1.0.jar`
+- Main jar: `build/libs/satiscraftory-1.1.1.jar`
 - Reobf output: `build/reobfJar/output.jar`
 
 This project also runs `deployToModpack` automatically after `build`, which copies the built jar to:
