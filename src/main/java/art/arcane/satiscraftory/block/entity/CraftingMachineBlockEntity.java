@@ -93,7 +93,13 @@ public abstract class CraftingMachineBlockEntity extends BlockEntity implements 
     }
 
     public int inputLimit(ItemStack stack) {
-        // A 3x3 recipe may require repeated unstackable inputs, such as the three milk buckets in cake.
+        if (spec.inputSlots() > 1) {
+            if (level == null || recipeId == null || stack.isEmpty()) {
+                return 0;
+            }
+            return 2 * CraftingMachineRecipes.maxInputCount(level, recipeId, stack, template, spec.inputSlots());
+        }
+        // Preserve the Constructor's original buffer size, including repeated unstackable inputs.
         return Math.min(64, Math.max(9, stack.getMaxStackSize()));
     }
 
@@ -152,6 +158,13 @@ public abstract class CraftingMachineBlockEntity extends BlockEntity implements 
     private boolean acceptsIngredient(int slot, ItemStack stack) {
         if (level == null || recipeId == null || stack.isEmpty()) {
             return false;
+        }
+        if (spec.inputSlots() > 1) {
+            for (int other = 0; other < inventory.getSlots(); other++) {
+                if (other != slot && inventory.getStackInSlot(other).is(stack.getItem())) {
+                    return false;
+                }
+            }
         }
         var proposed = inputStacks();
         proposed.set(slot, stack);

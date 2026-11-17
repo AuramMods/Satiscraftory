@@ -22,7 +22,7 @@
     {
       "type": "patchouli:text",
       "title": "Supply Ingredients",
-      "text": "Two real inventory slots buffer ingredients. Any face except the output accepts items and RF. Three horizontal belts can feed it together.$(br2)Inputs share both buffers; room is reserved for a missing ingredient. The dropper face is the output."
+      "text": "Two ingredient buffers share all non-output faces. Three horizontal belts can feed them together; RF uses the same faces.$(br2)Each item type occupies one slot, capped at twice its recipe quantity. Crafting immediately frees room for more. The dropper face is the output."
     },
     {
       "type": "patchouli:text",

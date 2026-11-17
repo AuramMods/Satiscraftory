@@ -87,6 +87,22 @@ public final class CraftingMachineRecipes {
         return Optional.of(new Plan(search.used.clone(), search.result.copy(), remainders));
     }
 
+    /** Maximum quantity of this exact input that can participate in one valid craft. */
+    public static int maxInputCount(Level level, ResourceLocation id, ItemStack input, ItemStack requested, int maxTypes) {
+        var found = level.getRecipeManager().byKey(id);
+        if (found.isEmpty() || !(found.get() instanceof CraftingRecipe recipe) || input.isEmpty()) {
+            return 0;
+        }
+        int maximum = (int) cells(recipe).stream().filter(cell -> cell.ingredient().test(input)).count();
+        for (int count = maximum; count > 0; count--) {
+            var search = new Search(level, recipe, requested, List.of(input.copyWithCount(9)), maxTypes, true, count);
+            if (search.solve()) {
+                return count;
+            }
+        }
+        return 0;
+    }
+
     private record Cell(int slot, Ingredient ingredient) {}
 
     private static List<Cell> cells(CraftingRecipe recipe) {
@@ -138,11 +154,17 @@ public final class CraftingMachineRecipes {
         private final int maxTypes;
         private final int fixedTypes;
         private final boolean allowNewTypes;
+        private final int minimumFirstUses;
         private final TransientCraftingContainer grid = emptyGrid();
         private ItemStack result = ItemStack.EMPTY;
 
         private Search(Level level, CraftingRecipe recipe, ItemStack requested, List<ItemStack> fixed,
                 int maxTypes, boolean allowNewTypes) {
+            this(level, recipe, requested, fixed, maxTypes, allowNewTypes, 0);
+        }
+
+        private Search(Level level, CraftingRecipe recipe, ItemStack requested, List<ItemStack> fixed,
+                int maxTypes, boolean allowNewTypes, int minimumFirstUses) {
             this.level = level;
             this.recipe = recipe;
             this.requested = requested;
@@ -152,6 +174,7 @@ public final class CraftingMachineRecipes {
             this.maxTypes = maxTypes;
             this.fixedTypes = fixed.size();
             this.allowNewTypes = allowNewTypes;
+            this.minimumFirstUses = minimumFirstUses;
         }
 
         private boolean solve() {
@@ -159,6 +182,17 @@ public final class CraftingMachineRecipes {
         }
 
         private boolean fill(int index) {
+            if (minimumFirstUses > 0) {
+                int possible = used[0];
+                for (int remaining = index; remaining < cells.size(); remaining++) {
+                    if (cells.get(remaining).ingredient().test(stacks.get(0))) {
+                        possible++;
+                    }
+                }
+                if (possible < minimumFirstUses) {
+                    return false;
+                }
+            }
             if (index == cells.size()) {
                 // Partial-input validation must account for every occupied buffer.
                 for (int type = 0; allowNewTypes && type < fixedTypes; type++) {
