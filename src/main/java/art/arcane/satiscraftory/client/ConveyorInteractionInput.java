@@ -187,7 +187,7 @@ public final class ConveyorInteractionInput {
         return t == 1.0D ? 255 : (int) Math.round(255.0D * (1.0D - Math.pow(2.0D, -10.0D * t)));
     }
 
-    private static BeltTargeting.Ray aim(Minecraft minecraft, float partialTick) {
+    static BeltTargeting.Ray aim(Minecraft minecraft, float partialTick) {
         BeltTargeting.Ray ray = BeltTargeting.playerRay(minecraft.player, partialTick);
         if (minecraft.hitResult instanceof EntityHitResult entity
                 && ray.from().distanceToSqr(entity.getLocation()) < ray.from().distanceToSqr(ray.to())) {
