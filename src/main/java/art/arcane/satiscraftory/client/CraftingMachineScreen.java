@@ -13,7 +13,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 import java.util.Optional;
 
-public class CraftingMachineScreen<T extends CraftingMachineMenu> extends AbstractContainerScreen<T> {
+public class CraftingMachineScreen<T extends CraftingMachineMenu> extends AbstractContainerScreen<T> implements GhostItemScreen {
     private static final int ROW_Y = 78;
     private static final int ROW_HEIGHT = 18;
     private static final int VISIBLE_ROWS = 3;
@@ -34,6 +34,11 @@ public class CraftingMachineScreen<T extends CraftingMachineMenu> extends Abstra
 
     public Rect2i recipeArea() {
         return new Rect2i(leftPos + 209, topPos + 34, 18, 18);
+    }
+
+    @Override
+    public List<GhostTarget> ghostTargets() {
+        return List.of(new GhostTarget(recipeArea(), this::setRecipeTemplate));
     }
 
     public void setRecipeTemplate(ItemStack stack) {

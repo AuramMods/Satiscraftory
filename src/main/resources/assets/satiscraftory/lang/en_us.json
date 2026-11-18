@@ -22,5 +22,16 @@
   "gui.satiscraftory.no_recipes_1": "No single-ingredient recipes",
   "gui.satiscraftory.no_recipes_2": "No recipes using up to two ingredients",
   "block.satiscraftory.manufacturer": "Manufacturer",
-  "gui.satiscraftory.no_recipes_4": "No recipes using up to four ingredients"
+  "gui.satiscraftory.no_recipes_4": "No recipes using up to four ingredients",
+  "block.satiscraftory.smart_splitter": "Smart Splitter",
+  "gui.satiscraftory.output.left": "Left",
+  "gui.satiscraftory.output.center": "Center",
+  "gui.satiscraftory.output.right": "Right",
+  "gui.satiscraftory.filter_mode.unassigned": "Unassigned",
+  "gui.satiscraftory.filter_mode.overflow": "Overflow",
+  "gui.satiscraftory.filter_mode.whitelist": "Whitelist",
+  "gui.satiscraftory.filter_mode.blacklist": "Blacklist",
+  "gui.satiscraftory.ghost_filters": "Item templates — no items consumed",
+  "gui.satiscraftory.filter_set_hint": "Click with an item or drag from JEI.",
+  "gui.satiscraftory.filter_clear_hint": "Empty cursor: left/right-click to clear."
 }

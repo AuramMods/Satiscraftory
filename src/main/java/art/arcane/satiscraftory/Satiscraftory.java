@@ -4,6 +4,7 @@ import art.arcane.satiscraftory.block.ConveyorBlock;
 import art.arcane.satiscraftory.block.ConveyorEndBlock;
 import art.arcane.satiscraftory.block.MergerBlock;
 import art.arcane.satiscraftory.block.SplitterBlock;
+import art.arcane.satiscraftory.block.SmartSplitterBlock;
 import art.arcane.satiscraftory.block.SmelterBlock;
 import art.arcane.satiscraftory.block.ConstructorBlock;
 import art.arcane.satiscraftory.block.AssemblerBlock;
@@ -13,6 +14,7 @@ import art.arcane.satiscraftory.block.entity.ConveyorBlockEntity.SplineVisualIte
 import art.arcane.satiscraftory.block.entity.ConveyorEndBlockEntity;
 import art.arcane.satiscraftory.block.entity.MergerBlockEntity;
 import art.arcane.satiscraftory.block.entity.SplitterBlockEntity;
+import art.arcane.satiscraftory.block.entity.SmartSplitterBlockEntity;
 import art.arcane.satiscraftory.block.entity.SmelterBlockEntity;
 import art.arcane.satiscraftory.block.entity.ConstructorBlockEntity;
 import art.arcane.satiscraftory.block.entity.AssemblerBlockEntity;
@@ -26,6 +28,8 @@ import art.arcane.satiscraftory.network.CraftingMachineNetwork;
 import art.arcane.satiscraftory.menu.ConstructorMenu;
 import art.arcane.satiscraftory.menu.AssemblerMenu;
 import art.arcane.satiscraftory.menu.ManufacturerMenu;
+import art.arcane.satiscraftory.menu.SmartSplitterMenu;
+import art.arcane.satiscraftory.network.SmartSplitterNetwork;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -66,6 +70,9 @@ public class Satiscraftory {
     public static final RegistryObject<MenuType<ManufacturerMenu>> MANUFACTURER_MENU = MENUS.register(
             "manufacturer", () -> IForgeMenuType.create(ManufacturerMenu::new));
 
+    public static final RegistryObject<MenuType<SmartSplitterMenu>> SMART_SPLITTER_MENU = MENUS.register(
+            "smart_splitter", () -> IForgeMenuType.create(SmartSplitterMenu::new));
+
     public static final RegistryObject<EntityType<SplineVisualItemEntity>> CONVEYOR_ITEM_VISUAL = ENTITIES.register(
             "conveyor_item_visual",
             () -> EntityType.Builder.<SplineVisualItemEntity>createNothing(MobCategory.MISC)
@@ -89,6 +96,10 @@ public class Satiscraftory {
     public static final RegistryObject<Block> SPLITTER = BLOCKS.register(
             "splitter",
             () -> new SplitterBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL))
+    );
+    public static final RegistryObject<Block> SMART_SPLITTER = BLOCKS.register(
+            "smart_splitter",
+            () -> new SmartSplitterBlock(BlockBehaviour.Properties.of().strength(2.0F).sound(SoundType.METAL))
     );
     public static final RegistryObject<Block> MERGER = BLOCKS.register(
             "merger",
@@ -120,6 +131,7 @@ public class Satiscraftory {
     public static final RegistryObject<Item> CONVEYOR_5_ITEM = registerConveyorItem("conveyor_5", CONVEYOR_5);
     public static final RegistryObject<Item> CONVEYOR_6_ITEM = registerConveyorItem("conveyor_6", CONVEYOR_6);
     public static final RegistryObject<Item> SPLITTER_ITEM = ITEMS.register("splitter", () -> new BlockItem(SPLITTER.get(), new Item.Properties()));
+    public static final RegistryObject<Item> SMART_SPLITTER_ITEM = ITEMS.register("smart_splitter", () -> new BlockItem(SMART_SPLITTER.get(), new Item.Properties()));
     public static final RegistryObject<Item> MERGER_ITEM = ITEMS.register("merger", () -> new BlockItem(MERGER.get(), new Item.Properties()));
     public static final RegistryObject<Item> SMELTER_ITEM = ITEMS.register("smelter", () -> new BlockItem(SMELTER.get(), new Item.Properties()));
     public static final RegistryObject<Item> CONSTRUCTOR_ITEM = ITEMS.register("constructor", () -> new BlockItem(CONSTRUCTOR.get(), new Item.Properties()));
@@ -147,6 +159,10 @@ public class Satiscraftory {
     public static final RegistryObject<BlockEntityType<SplitterBlockEntity>> SPLITTER_BLOCK_ENTITY = BLOCK_ENTITIES.register(
             "splitter",
             () -> BlockEntityType.Builder.of(SplitterBlockEntity::new, SPLITTER.get()).build(null)
+    );
+    public static final RegistryObject<BlockEntityType<SmartSplitterBlockEntity>> SMART_SPLITTER_BLOCK_ENTITY = BLOCK_ENTITIES.register(
+            "smart_splitter",
+            () -> BlockEntityType.Builder.of(SmartSplitterBlockEntity::new, SMART_SPLITTER.get()).build(null)
     );
     public static final RegistryObject<BlockEntityType<MergerBlockEntity>> MERGER_BLOCK_ENTITY = BLOCK_ENTITIES.register(
             "merger",
@@ -182,6 +198,7 @@ public class Satiscraftory {
                 output.accept(CONVEYOR_5_ITEM.get());
                 output.accept(CONVEYOR_6_ITEM.get());
                 output.accept(SPLITTER_ITEM.get());
+                output.accept(SMART_SPLITTER_ITEM.get());
                 output.accept(MERGER_ITEM.get());
                 output.accept(SMELTER_ITEM.get());
                 output.accept(CONSTRUCTOR_ITEM.get());
@@ -195,6 +212,7 @@ public class Satiscraftory {
         context.registerConfig(ModConfig.Type.CLIENT, BeltClientConfig.SPEC);
         BeltPlacementNetwork.register();
         CraftingMachineNetwork.register();
+        SmartSplitterNetwork.register();
         BeltInteractionNetwork.register();
         IEventBus modEventBus = context.getModEventBus();
         BLOCKS.register(modEventBus);

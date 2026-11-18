@@ -10,6 +10,7 @@ import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
@@ -30,12 +31,17 @@ public class SplitterBlockEntity extends BlockEntity {
     private ItemStackHandler inventory;
     private int nextOutputIndex;
     private boolean suppressDirtyCallbacks;
+    private boolean transferring;
 
     private LazyOptional<IItemHandler> unsidedCapability = LazyOptional.empty();
     private final Map<Direction, LazyOptional<IItemHandler>> sidedCapabilities = new EnumMap<>(Direction.class);
 
     public SplitterBlockEntity(BlockPos pos, BlockState blockState) {
-        super(Satiscraftory.SPLITTER_BLOCK_ENTITY.get(), pos, blockState);
+        this(Satiscraftory.SPLITTER_BLOCK_ENTITY.get(), pos, blockState);
+    }
+
+    protected SplitterBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState blockState) {
+        super(type, pos, blockState);
         inventory = createInventory();
         rebuildCapabilities();
     }
@@ -45,6 +51,9 @@ public class SplitterBlockEntity extends BlockEntity {
     }
 
     private void tickServer(BlockState state) {
+        if (transferring) {
+            return;
+        }
         ItemStack bufferStack = inventory.getStackInSlot(BUFFER_SLOT);
         if (bufferStack.isEmpty()) {
             return;
@@ -56,29 +65,55 @@ public class SplitterBlockEntity extends BlockEntity {
         ItemStack single = bufferStack.copy();
         single.setCount(1);
 
-        for (int attempt = 0; attempt < OUTPUT_FACE_COUNT; attempt++) {
-            int outputIndex = Math.floorMod(nextOutputIndex + attempt, OUTPUT_FACE_COUNT);
-            Direction outputSide = outputOrder[outputIndex];
-            IItemHandler outputHandler = getOutputHandler(outputSide);
-            if (outputHandler == null) {
-                continue;
+        for (boolean overflow : new boolean[]{false, true}) {
+            for (int attempt = 0; attempt < OUTPUT_FACE_COUNT; attempt++) {
+                int outputIndex = Math.floorMod(nextOutputIndex + attempt, OUTPUT_FACE_COUNT);
+                Direction outputSide = outputOrder[outputIndex];
+                if (!matchesOutput(outputSide, single, overflow)) {
+                    continue;
+                }
+                IItemHandler outputHandler = getOutputHandler(outputSide);
+                if (outputHandler == null) {
+                    continue;
+                }
+                transferring = true;
+                try {
+                    if (!ItemTransfers.insert(outputHandler, single, true).isEmpty()
+                            || !ItemTransfers.insert(outputHandler, single, false).isEmpty()) {
+                        continue;
+                    }
+                    suppressDirtyCallbacks = true;
+                    inventory.setStackInSlot(BUFFER_SLOT, ItemStack.EMPTY);
+                    suppressDirtyCallbacks = false;
+                    nextOutputIndex = (outputIndex + 1) % OUTPUT_FACE_COUNT;
+                    setChanged();
+                    return;
+                } finally {
+                    transferring = false;
+                }
             }
-
-            if (!ItemTransfers.insert(outputHandler, single, true).isEmpty()) {
-                continue;
-            }
-
-            if (!ItemTransfers.insert(outputHandler, single, false).isEmpty()) {
-                continue;
-            }
-
-            suppressDirtyCallbacks = true;
-            inventory.setStackInSlot(BUFFER_SLOT, ItemStack.EMPTY);
-            suppressDirtyCallbacks = false;
-            nextOutputIndex = (outputIndex + 1) % OUTPUT_FACE_COUNT;
-            setChanged();
-            return;
         }
+    }
+
+    /** Normal splitters have only the regular routing pass. */
+    protected boolean matchesOutput(Direction side, ItemStack stack, boolean overflow) {
+        return !overflow;
+    }
+
+    protected boolean allowsPull(@Nullable Direction side, ItemStack stack) {
+        return true;
+    }
+
+    protected final boolean hasAcceptingRegularOutput(ItemStack stack) {
+        for (Direction side : getOutputOrder(getInputSide(getBlockState()))) {
+            if (matchesOutput(side, stack, false)) {
+                IItemHandler handler = getOutputHandler(side);
+                if (handler != null && ItemTransfers.insert(handler, stack.copyWithCount(1), true).isEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @Nullable
@@ -231,7 +266,8 @@ public class SplitterBlockEntity extends BlockEntity {
     }
 
     private ItemStack insertFromCapability(@Nullable Direction side, int slot, ItemStack stack, boolean simulate) {
-        if (stack.isEmpty() || slot != BUFFER_SLOT) {
+        if (stack.isEmpty() || slot != BUFFER_SLOT || transferring || isRemoved()
+                || (level != null && level.isClientSide && !simulate)) {
             return stack;
         }
 
@@ -256,7 +292,8 @@ public class SplitterBlockEntity extends BlockEntity {
     }
 
     private ItemStack extractFromCapability(@Nullable Direction side, int slot, int amount, boolean simulate) {
-        if (amount <= 0 || slot != BUFFER_SLOT) {
+        if (amount <= 0 || slot != BUFFER_SLOT || transferring || isRemoved()
+                || (level != null && level.isClientSide && !simulate)) {
             return ItemStack.EMPTY;
         }
 
@@ -264,6 +301,9 @@ public class SplitterBlockEntity extends BlockEntity {
             return ItemStack.EMPTY;
         }
 
+        if (!allowsPull(side, inventory.getStackInSlot(BUFFER_SLOT))) {
+            return ItemStack.EMPTY;
+        }
         return inventory.extractItem(BUFFER_SLOT, 1, simulate);
     }
 

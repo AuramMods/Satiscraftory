@@ -10,6 +10,7 @@
     "satiscraftory:smelter",
     "satiscraftory:constructor",
     "satiscraftory:assembler",
-    "satiscraftory:manufacturer"
+    "satiscraftory:manufacturer",
+    "satiscraftory:smart_splitter"
   ]
 }

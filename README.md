@@ -20,11 +20,12 @@ The authoritative values live in `gradle.properties` and are injected into `mods
 
 Install Patchouli to use the Satiscraftory Field Guide. Craft it with a book, a copper ingot, and yellow dye in any arrangement, or find it in the Satiscraftory creative tab.
 
-The orange and yellow guide covers belt placement, routing modes, all six belt tiers, tier swaps, item pickup, splitters, mergers, and the Smelter, Constructor, Assembler, and Manufacturer. Patchouli is optional.
+The orange and yellow guide covers belt placement, routing modes, all six belt tiers, tier swaps, item pickup, splitters, Smart Splitter output filters, mergers, and the Smelter, Constructor, Assembler, and Manufacturer. Patchouli is optional.
 
 ## What The Mod Does
 
 - Six conveyor tiers with straight and spline routing, animated cargo, inventory connections, and splitter/merger routing.
+- A Smart Splitter with independent Unassigned, Overflow, Whitelist, and Blacklist rules, nine ghost filters per output, and optional JEI dragging.
 - Belt selection, mining, item pickup, tier swaps, and pick-block targeting along the entire rendered belt.
 - An instant Smelter using 1,000 RF per smelted item and a 10,000 RF buffer. Items without a smelting recipe pass through unchanged.
 - Recipe-configured crafting machines:
@@ -88,7 +89,7 @@ That destination is configured by `modpack_deploy` in `gradle.properties`.
 
 - Run client: `./gradlew runClient`
 - Run dedicated server: `./gradlew runServer`
-- Run game test server: `./gradlew runGameTestServer` (includes the crafting-output conservation regressions in `src/gameTest`; these are excluded from production jars)
+- Run game test server: `./gradlew runGameTestServer` (includes crafting-output and Smart Splitter regressions in `src/gameTest`; these are excluded from production jars)
 - Generate data: `./gradlew runData`
 
 Runtime directories used by Gradle runs:

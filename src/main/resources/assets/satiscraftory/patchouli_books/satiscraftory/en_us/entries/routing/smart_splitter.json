@@ -1,0 +1,41 @@
+{
+  "name": "Smart Splitter",
+  "icon": "satiscraftory:smart_splitter",
+  "category": "satiscraftory:routing",
+  "sortnum": 20,
+  "pages": [
+    {
+      "type": "patchouli:crafting",
+      "recipe": "satiscraftory:smart_splitter",
+      "text": "Gold ingots in the corners, comparators on the four edges, and a Splitter in the center make one Smart Splitter. It keeps the Splitter shape with a green tint."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Configure the Outputs",
+      "text": "Right-click to configure $(thing)Left$(), $(thing)Center$(), and $(thing)Right$(). Each output has its own mode and nine item templates.$(br2)Left and right are viewed from the input, looking in the direction items travel. Holding a belt still lets you attach it to a port."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Unassigned and Overflow",
+      "text": "$(thing)Unassigned$() distributes items normally, sharing them across available outputs.$(br2)$(thing)Overflow$() is used only when no matching regular output can accept the item. Full, disconnected, and filter-rejecting regular outputs are skipped. Multiple overflow outputs share items."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Whitelist and Blacklist",
+      "text": "$(thing)Whitelist$() accepts only the listed item types; an empty whitelist accepts nothing.$(br2)$(thing)Blacklist$() rejects the listed types; an empty blacklist accepts everything.$(br2)Filters also apply when belts or other inventories pull items from an output."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Ghost Item Templates",
+      "text": "Click a template slot with an item on the cursor to save its type without taking the item. JEI items can be dragged directly into any slot.$(br2)Left- or right-click with an empty cursor to clear it. Filters ignore item count and NBT. Changing modes preserves templates; duplicates move to the chosen slot."
+    },
+    {
+      "type": "patchouli:text",
+      "title": "Routing Example",
+      "text": "Whitelist iron ingots on the left, blacklist iron ingots in the center, and set the right to Overflow.$(br2)Iron normally goes left; other items go center. If the matching destination jams, items go right. If every eligible destination is blocked, the item waits safely inside the splitter."
+    }
+  ],
+  "extra_recipe_mappings": {
+    "satiscraftory:smart_splitter": 0
+  }
+}

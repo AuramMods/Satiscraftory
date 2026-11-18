@@ -4,7 +4,9 @@ import art.arcane.satiscraftory.Satiscraftory;
 import art.arcane.satiscraftory.client.ConstructorScreen;
 import art.arcane.satiscraftory.client.AssemblerScreen;
 import art.arcane.satiscraftory.client.ManufacturerScreen;
-import art.arcane.satiscraftory.client.CraftingMachineScreen;
+import art.arcane.satiscraftory.client.GhostItemScreen;
+import art.arcane.satiscraftory.client.SmartSplitterScreen;
+import net.minecraft.client.gui.screens.Screen;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.gui.handlers.IGhostIngredientHandler;
@@ -27,9 +29,10 @@ public final class SatiscraftoryJeiPlugin implements IModPlugin {
         registerGhostHandler(registration, ConstructorScreen.class);
         registerGhostHandler(registration, AssemblerScreen.class);
         registerGhostHandler(registration, ManufacturerScreen.class);
+        registerGhostHandler(registration, SmartSplitterScreen.class);
     }
 
-    private static <T extends CraftingMachineScreen<?>> void registerGhostHandler(IGuiHandlerRegistration registration, Class<T> type) {
+    private static <T extends Screen & GhostItemScreen> void registerGhostHandler(IGuiHandlerRegistration registration, Class<T> type) {
         registration.addGhostIngredientHandler(type, new IGhostIngredientHandler<T>() {
             @Override
             public <I> List<Target<I>> getTargetsTyped(T screen, ITypedIngredient<I> ingredient, boolean doStart) {
@@ -37,14 +40,21 @@ public final class SatiscraftoryJeiPlugin implements IModPlugin {
                 if (stack.isEmpty()) {
                     return List.of();
                 }
-                return List.of(new Target<>() {
-                    public Rect2i getArea() {
-                        return screen.recipeArea();
-                    }
-                    public void accept(I ignored) {
-                        screen.setRecipeTemplate(stack.get());
-                    }
-                });
+                List<Target<I>> targets = new java.util.ArrayList<>();
+                for (var target : screen.ghostTargets()) {
+                    targets.add(new Target<>() {
+                        @Override
+                        public Rect2i getArea() {
+                            return target.area();
+                        }
+
+                        @Override
+                        public void accept(I ignored) {
+                            target.accept(stack.get());
+                        }
+                    });
+                }
+                return targets;
             }
 
             @Override

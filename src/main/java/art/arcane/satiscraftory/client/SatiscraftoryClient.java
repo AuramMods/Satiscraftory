@@ -10,6 +10,7 @@ import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
+import net.minecraftforge.client.event.RegisterColorHandlersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
@@ -27,7 +28,18 @@ public final class SatiscraftoryClient {
             MenuScreens.register(Satiscraftory.CONSTRUCTOR_MENU.get(), ConstructorScreen::new);
             MenuScreens.register(Satiscraftory.ASSEMBLER_MENU.get(), AssemblerScreen::new);
             MenuScreens.register(Satiscraftory.MANUFACTURER_MENU.get(), ManufacturerScreen::new);
+            MenuScreens.register(Satiscraftory.SMART_SPLITTER_MENU.get(), SmartSplitterScreen::new);
         });
+    }
+
+    @SubscribeEvent
+    public static void onBlockColors(RegisterColorHandlersEvent.Block event) {
+        event.register((state, level, pos, tint) -> 0xa8ffd8, Satiscraftory.SMART_SPLITTER.get());
+    }
+
+    @SubscribeEvent
+    public static void onItemColors(RegisterColorHandlersEvent.Item event) {
+        event.register((stack, tint) -> 0xa8ffd8, Satiscraftory.SMART_SPLITTER_ITEM.get());
     }
 
     @SubscribeEvent

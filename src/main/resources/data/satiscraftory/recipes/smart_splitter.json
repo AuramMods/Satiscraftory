@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    "IXI",
+    "XSX",
+    "IXI"
+  ],
+  "key": {
+    "I": {
+      "item": "minecraft:gold_ingot"
+    },
+    "X": {
+      "item": "minecraft:comparator"
+    },
+    "S": {
+      "item": "satiscraftory:splitter"
+    }
+  },
+  "result": {
+    "item": "satiscraftory:smart_splitter",
+    "count": 1
+  }
+}
