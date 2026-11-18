@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.2 — 2026-11-18
 
 - Add a green-tinted Smart Splitter with independent output modes, nine ghost item filters per side, optional JEI dragging, and overflow routing that respects both pushes and pulls.
 - Add the Smart Splitter crafting recipe and guidebook documentation.
