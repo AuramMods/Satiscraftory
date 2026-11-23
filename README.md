@@ -48,6 +48,8 @@ JEI and Patchouli are optional. Extra runtime jars in `extra-mods-1.20.1/` are u
 
 ## Build
 
+Run all builds and tests locally using the Gradle wrapper so they can use the local Gradle cache and available CPU cores. This project does not use GitHub Actions. Do not add or run Actions workflows for builds, tests, or releases. Publish release jars built locally.
+
 From the project root:
 
 ```bash
