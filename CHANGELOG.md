@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.4 — 2026-11-26
 
 - Add 36 Satiscraftory loading screen tips for the optional Tips mod, covering belt placement, routing, jam diagnosis, and machine setup.
 
